@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sirgal"
+dynamic = ["version"]
+description = "Find sensitive files your AI assistant can see before your employees do."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Bilal Umrani" }]
+keywords = ["security", "data-security", "dspm", "copilot", "privacy"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/bilalkumrani/sirgal"
+Issues = "https://github.com/bilalkumrani/sirgal/issues"
+
+[project.scripts]
+sirgal = "sirgal.cli:main"
+
+[tool.hatch.version]
+path = "src/sirgal/__init__.py"
