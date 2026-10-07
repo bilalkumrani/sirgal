@@ -31,30 +31,27 @@ MEDIUM  customer_export.csv    phone numbers   shared: 14 people outside the tea
 ## How it fits together
 
 ```mermaid
-flowchart LR
+flowchart TB
     admin["IT / Security team"]
+    ai["AI assistants<br/>Copilot, Gemini"]
 
     subgraph company["Your environment"]
-        sirgal["Sirgal<br/>runs on your machine or server"]
-        report["Risk report<br/>terminal + HTML"]
+        direction LR
+        sirgal["Sirgal"] --> report["Risk report"]
     end
 
     subgraph apps["Your cloud apps"]
+        direction LR
         gdrive["Google Drive"]
         m365["Microsoft 365<br/>(planned)"]
         slack["Slack<br/>(planned)"]
     end
 
-    ai["AI assistants<br/>Copilot, Gemini"]
-
-    admin -- "runs a scan" --> sirgal
-    sirgal -- "reads files + sharing settings<br/>(read-only)" --> gdrive
-    sirgal -.-> m365
-    sirgal -.-> slack
-    sirgal -- "creates" --> report
-    report -- "shows risky files" --> admin
-    ai -. "can read whatever<br/>employees can" .-> gdrive
-```
+    admin -- "1. runs a scan" --> sirgal
+    sirgal -- "2. read-only scan" --> apps
+    report -- "3. risky files" --> admin
+    ai -. "sees what<br/>employees see" .-> apps
+`````
 
 ## Who it's for
 
