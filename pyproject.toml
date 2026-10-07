@@ -23,6 +23,9 @@ classifiers = [
 Homepage = "https://github.com/bilalkumrani/sirgal"
 Issues = "https://github.com/bilalkumrani/sirgal/issues"
 
+[project.optional-dependencies]
+dev = ["faker"]
+
 [project.scripts]
 sirgal = "sirgal.cli:main"
 
