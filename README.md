@@ -28,6 +28,31 @@ MEDIUM  customer_export.csv    phone numbers   shared: 14 people outside the tea
 3 high-risk files, 11 medium. Full report: sirgal-report.html
 ```
 
+## How it fits together
+
+```mermaid
+flowchart TB
+    admin["IT / Security team"]
+    ai["AI assistants<br/>Copilot, Gemini"]
+
+    subgraph company["Your environment"]
+        direction LR
+        sirgal["Sirgal"] -- "3. checks content<br/>+ sharing" --> report["Risk report"]
+    end
+
+    subgraph apps["Your cloud apps"]
+        direction LR
+        gdrive["Google Drive"]
+        m365["Microsoft 365<br/>(planned)"]
+        slack["Slack<br/>(planned)"]
+    end
+
+    admin -- "1. runs a scan" --> sirgal
+    sirgal -- "2. reads files<br/>(read-only)" --> apps
+    report -- "4. risky files" --> admin
+    ai -. "sees what<br/>employees see" .-> apps
+`````
+
 ## Who it's for
 
 IT and security teams at small and mid-size companies getting ready to turn on Copilot or Gemini, and the IT providers (MSPs) who look after those companies.
