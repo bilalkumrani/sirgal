@@ -37,7 +37,7 @@ flowchart TB
 
     subgraph company["Your environment"]
         direction LR
-        sirgal["Sirgal"] --> report["Risk report"]
+        sirgal["Sirgal"] -- "3. checks content<br/>+ sharing" --> report["Risk report"]
     end
 
     subgraph apps["Your cloud apps"]
@@ -48,8 +48,8 @@ flowchart TB
     end
 
     admin -- "1. runs a scan" --> sirgal
-    sirgal -- "2. read-only scan" --> apps
-    report -- "3. risky files" --> admin
+    sirgal -- "2. reads files<br/>(read-only)" --> apps
+    report -- "4. risky files" --> admin
     ai -. "sees what<br/>employees see" .-> apps
 `````
 
