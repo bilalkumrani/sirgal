@@ -17,7 +17,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Bilal Umrani" }]
 keywords = ["security", "data-security", "dspm", "copilot", "privacy"]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Topic :: Security",
