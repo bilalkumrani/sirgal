@@ -1,9 +1,11 @@
 """Google Drive connector.
 
-Logs in with read-only access and lists every file you own, together with
-who it is shared with. It does not download any file contents.
+Logs in with read-only access, lists every file you own with who it is shared
+with, and checks text files for sensitive data. File contents are read in
+memory, checked, and discarded. Only counts of what was found are kept.
 """
 
+import io
 import os
 from pathlib import Path
 
@@ -12,6 +14,10 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+
+from sirgal.detectors import scan_text, worst_severity
+from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE, rate
 
 # Read-only. With this scope Sirgal cannot change, delete or re-share anything.
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -21,10 +27,16 @@ CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
 TOKEN_FILE = CONFIG_DIR / "gdrive-token.json"
 
 FOLDER_TYPE = "application/vnd.google-apps.folder"
-FIELDS = "nextPageToken, files(id, name, mimeType, parents, webViewLink, permissions(type, role, domain))"
+FIELDS = "nextPageToken, files(id, name, mimeType, size, parents, webViewLink, permissions(type, role, domain))"
 
-# Lower number = more exposed. Used to sort the worst files to the top.
-ANYONE, DOMAIN, PEOPLE, PRIVATE = 0, 1, 2, 3
+# Files we can read as plain text.
+TEXT_TYPES = {"text/plain", "text/csv", "text/markdown", "text/tab-separated-values", "application/json"}
+# Google's own formats are exported to text first.
+EXPORT_AS = {
+    "application/vnd.google-apps.document": "text/plain",
+    "application/vnd.google-apps.spreadsheet": "text/csv",  # first sheet only
+}
+MAX_BYTES = 10 * 1024 * 1024  # skip files bigger than 10 MB for now
 
 
 def get_credentials():
@@ -108,8 +120,28 @@ def build_path(item, folders):
     return "/".join(reversed(parts))
 
 
+def _read_text(service, item):
+    """Download a file into memory and return its text, or None if we can't read this type."""
+    mime = item["mimeType"]
+    if mime in EXPORT_AS:
+        request = service.files().export_media(fileId=item["id"], mimeType=EXPORT_AS[mime])
+    elif mime in TEXT_TYPES:
+        if int(item.get("size", 0)) > MAX_BYTES:
+            return None
+        request = service.files().get_media(fileId=item["id"])
+    else:
+        return None
+
+    buffer = io.BytesIO()  # in memory only, never written to disk
+    downloader = MediaIoBaseDownload(buffer, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    return buffer.getvalue().decode("utf-8", errors="replace")
+
+
 def scan():
-    """List owned files with their sharing, most exposed first."""
+    """Check every owned file's sharing and content. Most risky files first."""
     service = build("drive", "v3", credentials=get_credentials(), cache_discovery=False)
     items = _list_owned_items(service)
     folders = {i["id"]: i for i in items if i["mimeType"] == FOLDER_TYPE}
@@ -118,12 +150,20 @@ def scan():
     for item in items:
         if item["mimeType"] == FOLDER_TYPE:
             continue
-        level, label = describe_sharing(item.get("permissions", []))
+        exposure, sharing = describe_sharing(item.get("permissions", []))
+
+        text = _read_text(service, item)
+        checked = text is not None
+        found = scan_text(text, item["name"]) if checked else {}
+        del text  # the contents are not kept anywhere
+
         results.append({
             "path": build_path(item, folders),
             "link": item.get("webViewLink", ""),
-            "level": level,
-            "sharing": label,
+            "exposure": exposure,
+            "sharing": sharing,
+            "checked": checked,
+            "found": found,
+            "risk": rate(exposure, worst_severity(found), checked),
         })
-    results.sort(key=lambda r: (r["level"], r["path"]))
     return results
