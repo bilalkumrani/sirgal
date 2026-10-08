@@ -8,6 +8,10 @@ dynamic = ["version"]
 description = "Find sensitive files your AI assistant can see before your employees do."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "google-api-python-client",
+    "google-auth-oauthlib",
+]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Bilal Umrani" }]
