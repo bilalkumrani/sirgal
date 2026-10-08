@@ -28,10 +28,13 @@ Homepage = "https://github.com/bilalkumrani/sirgal"
 Issues = "https://github.com/bilalkumrani/sirgal/issues"
 
 [project.optional-dependencies]
-dev = ["faker"]
+dev = ["faker", "pytest"]
 
 [project.scripts]
 sirgal = "sirgal.cli:main"
 
 [tool.hatch.version]
 path = "src/sirgal/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
