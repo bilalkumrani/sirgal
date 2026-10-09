@@ -2,7 +2,7 @@
 
 **Find sensitive files your AI assistant can see before your employees do.**
 
-> Sirgal is in early development, and I'm building it in public. Version 0.1.0 scans Google Drive for overshared files that contain sensitive data. Microsoft 365 support is planned.
+> Sirgal is in early development, and I'm building it in public. Version 0.2.0 scans Google Drive for overshared files that contain sensitive data, including personal details in notes and documents (optional local model). Microsoft 365 support is planned.
 
 ## The problem
 
@@ -14,24 +14,30 @@ Before AI assistants, nobody stumbled on these files. Now anyone can ask "what d
 
 Sirgal connects to your company's cloud storage, checks every file, and looks for two things: sensitive content (salaries, ID numbers, card numbers, passwords) and sharing that's too wide. When both show up in the same file, Sirgal flags it in a report so you can fix it before you switch on an AI assistant.
 
-A real scan of the fake test company that ships with the project:
+A real scan of the sample test company that ships with the project:
 
 ```
-$ sirgal scan --source gdrive
+$ sirgal scan --source gdrive --model
 
-RISK    SHARED WITH            FILE                                     FOUND
-HIGH    anyone with the link   acme-robotics/HR/salaries_2026.csv       25 bank IBANs, salary data, 25 emails
-HIGH    1 person               acme-robotics/HR/employee_records.csv    25 SSNs, dates of birth, 25 emails
-HIGH    1 person               acme-robotics/IT/passwords.txt           6 passwords
-OK      anyone with the link   acme-robotics/Marketing/blog_ideas.txt   -
-OK      1 person               acme-robotics/General/team_lunch.txt     -
-OK      private                acme-robotics/Sales/customers.csv        40 card numbers, 38 phone numbers, 40 emails
+RISK    SHARED WITH            FILE                                          FOUND
+HIGH    anyone with the link   acme-robotics/HR/salaries_2026.csv            25 bank IBANs, salary data, 25 emails
+HIGH    1 person               acme-robotics/HR/employee_records.csv         25 SSNs, dates of birth, 25 emails
+HIGH    1 person               acme-robotics/HR/medical_leave_notes.txt      4 health details
+HIGH    1 person               acme-robotics/IT/passwords.txt                6 passwords
+MEDIUM  1 person               acme-robotics/HR/exit_interview_notes.txt     1 home address
+OK      anyone with the link   acme-robotics/Marketing/blog_ideas.txt        -
+OK      anyone with the link   acme-robotics/Marketing/customer_quote.txt    -
+OK      1 person               acme-robotics/General/office_move.txt         -
+OK      1 person               acme-robotics/General/team_lunch.txt          -
+OK      1 person               acme-robotics/General/weekly_sync_notes.txt   -
+OK      1 person               acme-robotics/HR/leave_policy.txt             -
+OK      private                acme-robotics/Sales/customers.csv             40 card numbers, 38 phone numbers, 40 emails
 
-6 files scanned: 3 high risk, 3 ok.
+12 files scanned: 4 high risk, 1 medium risk, 7 ok.
 File contents were read in memory and not saved.
 ```
 
-The public blog post ideas are fine, and so is the customer list with card numbers, because only its owner can see it. The salary sheet that anyone with the link can open is not.
+The salary sheet that anyone with the link can open is a problem. So are the medical leave notes and an exit interview with someone's home address. The customer list with card numbers is fine, because only its owner can see it. So are meeting notes full of names, an office address, and a leave policy that mentions medical leave.
 
 ### What it checks
 
@@ -41,6 +47,9 @@ The public blog post ideas are fine, and so is the customer list with card numbe
 | US Social Security numbers, phone numbers, emails | Pattern |
 | Salary data, dates of birth | Keyword plus matching numbers or dates |
 | Passwords | Login keywords plus lines like `Stripe: user / secret` |
+| Home addresses, health details | Optional local model ([GLiNER-PII](https://huggingface.co/knowledgator/gliner-pii-base-v1.0)), only when tied to a person |
+
+The model layer follows one rule: a detail counts only when it belongs to a person. "Jason's home address" is sensitive; the office address is not. "Jason is having knee surgery" is sensitive; "employees can take medical leave" is not. Names on their own never make a file risky. The model only reads shared files that the rules haven't already rated high. [How it was chosen](https://github.com/bilalkumrani/sirgal/blob/main/scripts/compare_detectors.py): on the test company it caught 6 of 6 sensitive files with no false alarms; Microsoft Presidio caught 5, missing the health details.
 
 It reads plain text, CSV, Google Docs and Google Sheets (first sheet). Other file types, like PDF and Word, are listed as **UNKNOWN** when shared, never as OK, because Sirgal doesn't call a file safe without looking inside.
 
@@ -80,16 +89,16 @@ Sirgal reads your files, so you should know exactly what it does with them.
 - **Runs on your own machine or servers.** Your data never goes to me or any third party.
 - **Read-only.** It asks Google for read-only access, so it can't change, delete or re-share anything. (A future opt-in "fix sharing" feature will ask for separate permission.)
 - **Doesn't keep file contents.** Files are read in memory during a scan and discarded right after. Sirgal keeps only the file name, link, sharing settings, and the types of sensitive data found.
-- **No AI services.** Detection runs locally. Nothing is sent to OpenAI, Google's AI, or anyone else.
+- **No outside AI services.** Everything runs on your machine, including the optional model. Nothing is sent to OpenAI, Google's AI, or anyone else.
 - **Open source.** Every line of code is here for you to check.
 
 ## Roadmap
 
 - [x] 0.0.1: package and command
-- [x] Fake company data generator for safe demos
+- [x] Test company data generator for safe demos
 - [x] Google Drive connector
 - [x] Sensitive data detection, layer 1: rules and checksums
-- [ ] Sensitive data detection, layer 2: names and addresses with a local model
+- [x] Sensitive data detection, layer 2: home addresses and health details with a local model (optional)
 - [ ] PDF and Word files
 - [ ] HTML report
 - [ ] Microsoft 365 (OneDrive and SharePoint) connector
@@ -130,6 +139,17 @@ The first time, your browser opens so you can approve read-only access. Sirgal s
 
 Sirgal currently scans files owned by the account you log in with.
 
+### Optional: check notes and documents too
+
+Rules can't spot a home address or a health condition written in a sentence. A small model that runs on your machine can:
+
+```
+pip install "sirgal[ner]"
+sirgal scan --source gdrive --model
+```
+
+The first run downloads the model from Hugging Face (about 700 MB) and caches it. It takes roughly a quarter of a second per shared document on a laptop. If you've already downloaded the model, point to its folder instead: `--model path/to/gliner-pii-base-v1.0`.
+
 ## Development
 
 ```
@@ -140,7 +160,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-`python3 scripts/make_test_data.py` creates the fake Acme Robotics files in `test-data/`. Upload them to a test Google account to try a real scan without touching real data.
+`python3 scripts/make_test_data.py` creates the sample Acme Robotics files in `test-data/`, with an answer key in `manifest.json`. Upload them to a test Google account to try a real scan without touching real data.
+
+`python3 scripts/compare_detectors.py` reruns the model comparison against that answer key (needs `pip install presidio-analyzer gliner` and a spaCy model; see the script for setup).
 
 ## Follow along
 
