@@ -37,23 +37,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from sirgal import ner  # noqa: E402
 from sirgal.detectors import scan_text, worst_severity  # noqa: E402
 
-# Layer 2 flags personal details only when they are tied to a person.
-# Everything else is reported but never flags a file on its own.
-GLINER_LABELS = [
-    "name",
-    "location city",
-    "location address",
-    "location street",
-    "condition",
-    "injury",
-    "medical process",
-    "drug",
-]
-GLINER_PERSON = {"name"}
-GLINER_ADDRESS = {"location address", "location street"}
-GLINER_HEALTH = {"condition", "injury", "drug"}  # "medical process" also matches "medical leave"
+# GLiNER uses Sirgal's own labels and rule (sirgal.ner), so this comparison
+# always measures exactly what Sirgal ships.
 
 PRESIDIO_ENTITIES = ["PERSON", "LOCATION", "NRP"]
 # Presidio has no street-address or health recognizer. LOCATION is the only
@@ -62,27 +50,10 @@ PRESIDIO_PERSON = {"PERSON"}
 PRESIDIO_ADDRESS = {"LOCATION"}
 
 
-def tied_to_person(found, person, *details):
-    """True when a person and at least one kind of personal detail were found."""
+def presidio_tied_to_person(found):
+    """Presidio version of Sirgal's rule: a person plus a place."""
     kinds = set(found)
-    return bool(kinds & person) and any(kinds & d for d in details)
-
-
-MAX_WORDS = 200  # long files are split into chunks, small models have a length limit
-
-
-def chunks(text, max_words=MAX_WORDS):
-    """Split text on line breaks into pieces of at most ~max_words words."""
-    piece, count = [], 0
-    for line in text.splitlines():
-        words = len(line.split())
-        if piece and count + words > max_words:
-            yield "\n".join(piece)
-            piece, count = [], 0
-        piece.append(line)
-        count += words
-    if piece:
-        yield "\n".join(piece)
+    return bool(kinds & PRESIDIO_PERSON) and bool(kinds & PRESIDIO_ADDRESS)
 
 
 class Presidio:
@@ -102,13 +73,13 @@ class Presidio:
 
     def find(self, text):
         found = {}
-        for part in chunks(text):
+        for part in ner.chunks(text):
             for r in self.engine.analyze(text=part, language="en", entities=PRESIDIO_ENTITIES):
                 found[r.entity_type] = found.get(r.entity_type, 0) + 1
         return found
 
     def sensitive(self, found):
-        return tied_to_person(found, PRESIDIO_PERSON, PRESIDIO_ADDRESS)
+        return presidio_tied_to_person(found)
 
 
 class Gliner:
@@ -124,13 +95,13 @@ class Gliner:
 
     def find(self, text):
         found = {}
-        for part in chunks(text):
-            for e in self.model.predict_entities(part, GLINER_LABELS, threshold=self.threshold):
+        for part in ner.chunks(text):
+            for e in self.model.predict_entities(part, ner.LABELS, threshold=self.threshold):
                 found[e["label"]] = found.get(e["label"], 0) + 1
         return found
 
     def sensitive(self, found):
-        return tied_to_person(found, GLINER_PERSON, GLINER_ADDRESS, GLINER_HEALTH)
+        return bool(ner.tied_to_person(found))
 
 
 def installed_mb(packages):
@@ -190,7 +161,7 @@ def main():
     parser.add_argument("--spacy-model", default="en_core_web_lg", help="spaCy model for Presidio")
     parser.add_argument("--gliner-model", default="models/gliner-pii-base-v1.0",
                         help="local folder or Hugging Face model id")
-    parser.add_argument("--threshold", type=float, default=0.3, help="GLiNER confidence threshold")
+    parser.add_argument("--threshold", type=float, default=ner.THRESHOLD, help="GLiNER confidence threshold")
     args = parser.parse_args()
 
     root = Path(args.data)

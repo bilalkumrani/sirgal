@@ -19,6 +19,9 @@ SEVERITY = {
     "date_of_birth": MEDIUM,
     "phone": MEDIUM,
     "email": LOW,
+    # Found by the optional model layer (sirgal.ner), tied to a person.
+    "health_info": HIGH,
+    "home_address": MEDIUM,
 }
 
 EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
