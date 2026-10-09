@@ -3,6 +3,7 @@
 import argparse
 
 from sirgal import __version__
+from sirgal.ner import DEFAULT_MODEL
 
 # (one, many). Types without a count are described in words only.
 LABELS = {
@@ -12,6 +13,8 @@ LABELS = {
     "password": ("password", "passwords"),
     "phone": ("phone number", "phone numbers"),
     "email": ("email", "emails"),
+    "home_address": ("home address", "home addresses"),
+    "health_info": ("health detail", "health details"),
 }
 NO_COUNT = {"salary": "salary data", "date_of_birth": "dates of birth"}
 
@@ -31,13 +34,23 @@ def describe_found(found: dict) -> str:
     return ", ".join(parts)
 
 
-def run_scan(source: str) -> None:
+def run_scan(source: str, model_name=None) -> None:
     # Imported here so `sirgal --version` stays fast.
     from sirgal.connectors import gdrive
     from sirgal.risk import OK, RISK_ORDER, UNKNOWN
 
+    model = None
+    if model_name:
+        from sirgal.ner import ModelDetector, ModelNotInstalled
+
+        print(f"Loading the local model ({model_name})...")
+        try:
+            model = ModelDetector(model_name)
+        except ModelNotInstalled as exc:
+            raise SystemExit(str(exc))
+
     print("Scanning Google Drive (read-only). Your browser may open to log in.\n")
-    results = gdrive.scan()
+    results = gdrive.scan(model=model)
 
     if not results:
         print("No files found.")
@@ -64,6 +77,8 @@ def run_scan(source: str) -> None:
     summary.append(f"{counts.get(OK, 0)} ok")
     print(f"\n{len(results)} files scanned: " + ", ".join(summary) + ".")
     print("File contents were read in memory and not saved.")
+    if model is None:
+        print("Tip: add --model to also check notes and documents for personal details.")
 
 
 def main() -> None:
@@ -89,10 +104,21 @@ def main() -> None:
         required=True,
         help="where to scan (only gdrive for now)",
     )
+    scan.add_argument(
+        "--model",
+        nargs="?",
+        const=DEFAULT_MODEL,
+        metavar="MODEL",
+        help=(
+            "also check notes and documents for personal details with a local model. "
+            "Optionally give a model folder or Hugging Face id. "
+            'Needs: pip install "sirgal[ner]"'
+        ),
+    )
 
     args = parser.parse_args()
     if args.command == "scan":
-        run_scan(args.source)
+        run_scan(args.source, args.model)
     else:
         parser.print_help()
 

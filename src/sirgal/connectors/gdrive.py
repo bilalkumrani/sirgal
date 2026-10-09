@@ -16,7 +16,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-from sirgal.detectors import scan_text, worst_severity
+from sirgal.detectors import HIGH, scan_text, worst_severity
 from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE, rate
 
 # Read-only. With this scope Sirgal cannot change, delete or re-share anything.
@@ -140,8 +140,13 @@ def _read_text(service, item):
     return buffer.getvalue().decode("utf-8", errors="replace")
 
 
-def scan():
-    """Check every owned file's sharing and content. Most risky files first."""
+def scan(model=None):
+    """Check every owned file's sharing and content.
+
+    model: an optional sirgal.ner.ModelDetector. When given, it also checks
+    shared files that the rules haven't already rated high. Private files are
+    always OK, so the model never needs to read them.
+    """
     service = build("drive", "v3", credentials=get_credentials(), cache_discovery=False)
     items = _list_owned_items(service)
     folders = {i["id"]: i for i in items if i["mimeType"] == FOLDER_TYPE}
@@ -155,6 +160,9 @@ def scan():
         text = _read_text(service, item)
         checked = text is not None
         found = scan_text(text, item["name"]) if checked else {}
+        if model is not None and checked and exposure != PRIVATE and worst_severity(found) != HIGH:
+            for kind, count in model.scan_text(text).items():
+                found[kind] = found.get(kind, 0) + count
         del text  # the contents are not kept anywhere
 
         results.append({

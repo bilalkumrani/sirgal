@@ -29,6 +29,7 @@ Issues = "https://github.com/bilalkumrani/sirgal/issues"
 
 [project.optional-dependencies]
 dev = ["faker", "pytest"]
+ner = ["gliner"]
 
 [project.scripts]
 sirgal = "sirgal.cli:main"
