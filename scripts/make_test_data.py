@@ -194,6 +194,27 @@ def main():
     )
     record("Marketing/customer_quote.txt", PUBLIC_LINK, ["person_name", "city"], sensitive=False)
 
+    # 11. Office move note with a real business address. Must stay OK:
+    # company addresses are public and show up in many ordinary files.
+    office = f"{fake.building_number()} West Madison Street, Chicago, IL 60602"
+    write_text(
+        root / "General/office_move.txt",
+        f"Office move\n\nFrom the first of next month we're moving to {office}. "
+        f"Parking is on the north side of the building. "
+        f"Questions go to the facilities channel.\n",
+    )
+    record("General/office_move.txt", COMPANY_WIDE, ["business_address", "city"], sensitive=False)
+
+    # 12. General leave policy that mentions medical leave but no people. Must stay OK.
+    write_text(
+        root / "HR/leave_policy.txt",
+        "Leave policy\n\n"
+        "Employees can take up to 12 weeks of medical leave per year. "
+        "Tell your manager as early as you can, and HR will help with the paperwork. "
+        "Parental leave and holidays are covered in the handbook.\n",
+    )
+    record("HR/leave_policy.txt", COMPANY_WIDE, ["health_topic"], sensitive=False)
+
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")
 
