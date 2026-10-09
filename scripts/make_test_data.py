@@ -1,8 +1,14 @@
 """Generate a fictional company's files for testing Sirgal.
 
 Some files contain sensitive data (salaries, SSNs, card numbers, passwords),
-some are harmless. manifest.json records what each file contains and how it
-is meant to be shared, so later we can check whether Sirgal flags the right ones.
+some are harmless. manifest.json records what each file contains, how it is
+meant to be shared, and which detection layer should catch it:
+
+    "rules"  structured data that patterns and checksums can find
+    "model"  sensitive details in written text, which needs a local model
+
+Some harmless files are full of people's names on purpose. Almost every
+document mentions people, so names alone must not make a file risky.
 
 Everything here is fake, made up by Faker.
 
@@ -69,12 +75,15 @@ def main():
     root = Path(args.out) / "acme-robotics"
     manifest = []
 
-    def record(rel_path, sharing, contains):
+    def record(rel_path, sharing, contains, sensitive=None, layer=None):
+        if sensitive is None:
+            sensitive = bool(contains)
         manifest.append({
             "path": rel_path,
             "sharing": sharing,
-            "sensitive": bool(contains),
+            "sensitive": sensitive,
             "contains": contains,
+            "layer": layer if layer else ("rules" if sensitive else None),
         })
 
     staff = make_employees(fake, args.employees)
@@ -124,12 +133,74 @@ def main():
     )
     record("General/team_lunch.txt", COMPANY_WIDE, [])
 
+    # ---- Written documents. Rules can't catch these; a local model should. ----
+
+    # 7. Exit interview with a home address, visible to the whole company.
+    leaver = fake.random_element(staff)
+    leaver_first = leaver["name"].split()[0]
+    reason = fake.random_element([
+        "a long commute and no option to work remotely",
+        "wanting to move into a management role",
+        "moving closer to family",
+    ])
+    address = f"{fake.street_address()}, {fake.city()}, {fake.state_abbr()} {fake.zipcode()}"
+    write_text(
+        root / "HR/exit_interview_notes.txt",
+        f"Exit interview notes\n\n"
+        f"Employee: {leaver['name']}, {leaver['job']}\n\n"
+        f"{leaver_first} said the main reason for leaving was {reason}. "
+        f"{leaver_first} was positive about the team but felt the role had stopped growing.\n\n"
+        f"Send the final documents to {leaver_first}'s home address: {address}.\n",
+    )
+    record("HR/exit_interview_notes.txt", COMPANY_WIDE, ["person_name", "home_address"], layer="model")
+
+    # 8. Medical leave notes, visible to the whole company.
+    conditions = [
+        "recovery after knee surgery",
+        "treatment for anxiety",
+        "complications during pregnancy",
+        "ongoing chemotherapy",
+        "a back injury",
+    ]
+    leave_lines = []
+    for person in fake.random_elements(staff, length=4, unique=True):
+        first = person["name"].split()[0]
+        leave_lines.append(
+            f"{person['name']} is on medical leave for {fake.random_element(conditions)}. "
+            f"{first} expects to return in {fake.random_int(2, 10)} weeks."
+        )
+    write_text(root / "HR/medical_leave_notes.txt", "Leave tracker\n\n" + "\n".join(leave_lines) + "\n")
+    record("HR/medical_leave_notes.txt", COMPANY_WIDE, ["person_name", "health_info"], layer="model")
+
+    # 9. Meeting notes full of names but nothing sensitive. Must stay OK.
+    attendees = [p["name"] for p in fake.random_elements(staff, length=4, unique=True)]
+    firsts = [n.split()[0] for n in attendees]
+    write_text(
+        root / "General/weekly_sync_notes.txt",
+        f"Weekly product sync\n\nAttendees: {', '.join(attendees)}\n\n"
+        f"{firsts[0]} walked through the roadmap for next quarter. "
+        f"{firsts[1]} will follow up with the design team about the new onboarding screens. "
+        f"{firsts[2]} and {firsts[3]} are pairing on the reporting bug.\n\n"
+        f"Next sync is on Thursday.\n",
+    )
+    record("General/weekly_sync_notes.txt", COMPANY_WIDE, ["person_name"], sensitive=False)
+
+    # 10. Public customer quote with a name and a city. Public on purpose, must stay OK.
+    write_text(
+        root / "Marketing/customer_quote.txt",
+        f"Customer quote for the website\n\n"
+        f"\"{fake.catch_phrase()} is exactly what our warehouse needed.\" "
+        f"said {fake.name()}, operations lead at {fake.company()} in {fake.city()}.\n",
+    )
+    record("Marketing/customer_quote.txt", PUBLIC_LINK, ["person_name", "city"], sensitive=False)
+
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")
 
     risky = sum(1 for m in manifest if m["sensitive"] and m["sharing"] != PRIVATE)
     print(f"Created {len(manifest)} files in {root}/")
-    print(f"{risky} are sensitive and overshared. See manifest.json for details.")
+    model_only = sum(1 for m in manifest if m["layer"] == "model")
+    print(f"{risky} are sensitive and overshared ({model_only} need the model layer). See manifest.json for details.")
 
 
 if __name__ == "__main__":
