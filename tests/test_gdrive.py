@@ -2,6 +2,9 @@
 
 from unittest import mock
 
+import httplib2
+from googleapiclient.errors import HttpError
+
 from sirgal.connectors import gdrive
 from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE
 
@@ -35,6 +38,68 @@ def test_build_path_survives_a_folder_loop():
         "b": {"id": "b", "name": "B", "parents": ["a"]},
     }
     assert gdrive.build_path({"name": "f.txt", "parents": ["a"]}, folders) == "B/A/f.txt"
+
+
+def test_list_owned_items_retries_each_page():
+    service = mock.MagicMock()
+    execute = service.files.return_value.list.return_value.execute
+    execute.side_effect = [
+        {"files": [{"id": "1"}], "nextPageToken": "next"},
+        {"files": [{"id": "2"}]},
+    ]
+
+    assert gdrive._list_owned_items(service) == [{"id": "1"}, {"id": "2"}]
+    assert execute.call_count == 2
+    assert all(call.kwargs == {"num_retries": 3} for call in execute.call_args_list)
+
+
+def test_download_retries_each_chunk():
+    with mock.patch.object(gdrive, "MediaIoBaseDownload") as downloader_class:
+        downloader = downloader_class.return_value
+        downloader.next_chunk.return_value = (None, True)
+
+        assert gdrive._download(object()) == b""
+
+    downloader.next_chunk.assert_called_once_with(num_retries=3)
+
+
+def test_scan_marks_download_timeout_unknown_and_continues():
+    items = [
+        {"id": "1", "name": "timeout.txt", "mimeType": "text/plain", "permissions": [OWNER, FRIEND]},
+        {"id": "2", "name": "ok.txt", "mimeType": "text/plain", "permissions": [OWNER, FRIEND]},
+    ]
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": items}
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_read_text", side_effect=[TimeoutError("timed out"), "Team lunch"]):
+        results = {result["path"]: result for result in gdrive.scan()}
+
+    assert results["timeout.txt"]["risk"] == "unknown"
+    assert results["timeout.txt"]["checked"] is False
+    assert results["timeout.txt"]["note"] == "couldn't download: network timeout"
+    assert results["ok.txt"]["risk"] == "ok"
+
+
+def test_scan_redacts_http_error_details_from_download_note():
+    item = {"id": "1", "name": "private.txt", "mimeType": "text/plain", "permissions": [OWNER, FRIEND]}
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": [item]}
+    error = HttpError(
+        httplib2.Response({"status": 403}),
+        b"private response details",
+        uri="https://www.googleapis.com/drive/v3/files/private-id?token=secret",
+    )
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_read_text", side_effect=error):
+        result = gdrive.scan()[0]
+
+    assert result["risk"] == "unknown"
+    assert result["note"] == "couldn't download: Google returned 403"
+    assert "private-id" not in result["note"]
+    assert "secret" not in result["note"]
+    assert "private response details" not in result["note"]
 
 
 def _fake_drive(items, contents):

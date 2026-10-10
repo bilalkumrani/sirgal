@@ -9,11 +9,13 @@ import io
 import os
 from pathlib import Path
 
-from google.auth.exceptions import RefreshError
+import httplib2
+from google.auth.exceptions import RefreshError, TransportError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
 from sirgal.detectors import HIGH, scan_text, worst_severity
@@ -40,6 +42,14 @@ EXPORT_AS = {
     "application/vnd.google-apps.spreadsheet": XLSX_MIME,
 }
 MAX_BYTES = 10 * 1024 * 1024  # skip files bigger than 10 MB for now
+RETRY_COUNT = 3
+DOWNLOAD_ERRORS = (
+    HttpError,
+    httplib2.HttpLib2Error,
+    TransportError,
+    TimeoutError,
+    OSError,
+)
 
 
 def get_credentials():
@@ -88,7 +98,7 @@ def _list_owned_items(service, progress=None):
             fields=FIELDS,
             pageSize=100,
             pageToken=page_token,
-        ).execute()
+        ).execute(num_retries=RETRY_COUNT)
         items.extend(response.get("files", []))
         if progress:
             progress.status(f"Listing files... {len(items)} found")
@@ -136,8 +146,21 @@ def _download(request):
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
     while not done:
-        _, done = downloader.next_chunk()
+        _, done = downloader.next_chunk(num_retries=RETRY_COUNT)
     return buffer.getvalue()
+
+
+def _download_problem(error):
+    """Return a short, non-sensitive reason for a failed download."""
+    if isinstance(error, HttpError):
+        return f"Google returned {error.resp.status}"
+    if (
+        isinstance(error, TimeoutError)
+        or "timeout" in str(error).lower()
+        or "timed out" in str(error).lower()
+    ):
+        return "network timeout"
+    return "network error"
 
 
 def _read_text(service, item):
@@ -180,7 +203,12 @@ def scan(model=None, progress=None):
             progress.step(done, len(files), path)
         exposure, sharing = describe_sharing(item.get("permissions", []))
 
-        text = _read_text(service, item)
+        download_error = None
+        try:
+            text = _read_text(service, item)
+        except DOWNLOAD_ERRORS as error:
+            text = None
+            download_error = error
         checked = text is not None
         found = scan_text(text, item["name"]) if checked else {}
         if model is not None and checked and exposure != PRIVATE and worst_severity(found) != HIGH:
@@ -189,7 +217,9 @@ def scan(model=None, progress=None):
         del text  # the contents are not kept anywhere
 
         note = ""
-        if not checked:
+        if download_error is not None:
+            note = "couldn't download: " + _download_problem(download_error)
+        elif not checked:
             if not supported(item):
                 note = "file type not supported yet"
             elif int(item.get("size", 0)) > MAX_BYTES:
