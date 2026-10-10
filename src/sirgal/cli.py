@@ -63,7 +63,7 @@ def run_scan(source: str, model_name=None) -> None:
     print(f"{'RISK':<7} {'SHARED WITH'.ljust(share_w)}   {'FILE'.ljust(path_w)}   FOUND")
     for r in results:
         if not r["checked"]:
-            found = "(not checked: file type not supported yet)"
+            found = f"(not checked: {r.get('note') or 'file type not supported yet'})"
         else:
             found = describe_found(r["found"]) or "-"
         print(f"{r['risk'].upper():<7} {r['sharing'].ljust(share_w)}   {r['path'].ljust(path_w)}   {found}")

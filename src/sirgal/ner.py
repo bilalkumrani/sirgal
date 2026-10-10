@@ -18,9 +18,11 @@ MAX_WORDS = 200   # the model has a length limit, so long text is split
 # The model picks the closest label from this list, so the list must include
 # "decoy" labels too. Without "location city", a city name gets labelled as an
 # address; without "medical process", "medical leave" gets labelled as a
-# condition. Decoys are found but never counted.
+# condition; without "organization", a company name on an invoice gets labelled
+# as a person's name. Decoys are found but never counted.
 LABELS = [
     "name",
+    "organization",
     "location city",
     "location address",
     "location street",

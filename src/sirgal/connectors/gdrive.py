@@ -17,6 +17,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 from sirgal.detectors import HIGH, scan_text, worst_severity
+from sirgal.extract import XLSX, extract_text, kind_for
 from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE, rate
 
 # Read-only. With this scope Sirgal cannot change, delete or re-share anything.
@@ -31,10 +32,12 @@ FIELDS = "nextPageToken, files(id, name, mimeType, size, parents, webViewLink, p
 
 # Files we can read as plain text.
 TEXT_TYPES = {"text/plain", "text/csv", "text/markdown", "text/tab-separated-values", "application/json"}
-# Google's own formats are exported to text first.
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+# Google's own formats are exported first. Sheets go out as Excel so that every
+# tab is checked, not just the first one.
 EXPORT_AS = {
     "application/vnd.google-apps.document": "text/plain",
-    "application/vnd.google-apps.spreadsheet": "text/csv",  # first sheet only
+    "application/vnd.google-apps.spreadsheet": XLSX_MIME,
 }
 MAX_BYTES = 10 * 1024 * 1024  # skip files bigger than 10 MB for now
 
@@ -120,24 +123,39 @@ def build_path(item, folders):
     return "/".join(reversed(parts))
 
 
-def _read_text(service, item):
-    """Download a file into memory and return its text, or None if we can't read this type."""
+def supported(item):
+    """True if Sirgal knows how to read this kind of file."""
     mime = item["mimeType"]
-    if mime in EXPORT_AS:
-        request = service.files().export_media(fileId=item["id"], mimeType=EXPORT_AS[mime])
-    elif mime in TEXT_TYPES:
-        if int(item.get("size", 0)) > MAX_BYTES:
-            return None
-        request = service.files().get_media(fileId=item["id"])
-    else:
-        return None
+    return mime in TEXT_TYPES or mime in EXPORT_AS or kind_for(mime) is not None
 
+
+def _download(request):
     buffer = io.BytesIO()  # in memory only, never written to disk
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
     while not done:
         _, done = downloader.next_chunk()
-    return buffer.getvalue().decode("utf-8", errors="replace")
+    return buffer.getvalue()
+
+
+def _read_text(service, item):
+    """Download a file into memory and return its text, or None if there is none to read."""
+    mime = item["mimeType"]
+    if mime in EXPORT_AS:
+        target = EXPORT_AS[mime]
+        data = _download(service.files().export_media(fileId=item["id"], mimeType=target))
+    elif supported(item):
+        if int(item.get("size", 0)) > MAX_BYTES:
+            return None
+        target = mime
+        data = _download(service.files().get_media(fileId=item["id"]))
+    else:
+        return None
+
+    kind = XLSX if target == XLSX_MIME else kind_for(target)
+    if kind:
+        return extract_text(data, kind)  # PDF, Word, Excel: None if no text inside
+    return data.decode("utf-8", errors="replace")
 
 
 def scan(model=None):
@@ -165,8 +183,18 @@ def scan(model=None):
                 found[kind] = found.get(kind, 0) + count
         del text  # the contents are not kept anywhere
 
+        note = ""
+        if not checked:
+            if not supported(item):
+                note = "file type not supported yet"
+            elif int(item.get("size", 0)) > MAX_BYTES:
+                note = "larger than 10 MB, skipped for now"
+            else:
+                note = "no readable text, maybe a scan or a protected file"
+
         results.append({
             "path": build_path(item, folders),
+            "note": note,
             "link": item.get("webViewLink", ""),
             "exposure": exposure,
             "sharing": sharing,

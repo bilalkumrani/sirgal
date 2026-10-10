@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from sirgal import ner  # noqa: E402
 from sirgal.detectors import scan_text, worst_severity  # noqa: E402
+from sirgal.extract import extract_text, kind_for  # noqa: E402
 
 # GLiNER uses Sirgal's own labels and rule (sirgal.ner), so this comparison
 # always measures exactly what Sirgal ships.
@@ -132,9 +133,11 @@ def evaluate(files, root, model=None):
     """Score one setup. Returns per-file rows and a summary."""
     rows, times = [], []
     for entry in files:
-        if not entry["path"].endswith((".txt", ".csv")):
-            continue  # PDF, Word and Excel join once Sirgal can read them
-        text = (root / entry["path"]).read_text(encoding="utf-8")
+        if entry["layer"] == "unreadable":
+            continue  # nothing to read; the scan reports these as UNKNOWN
+        path = root / entry["path"]
+        kind = kind_for(name=path.name)
+        text = extract_text(path.read_bytes(), kind) if kind else path.read_text(encoding="utf-8")
         rules_found = scan_text(text, Path(entry["path"]).name)
         flagged = worst_severity(rules_found) in ("high", "medium")
         model_found = {}
@@ -197,7 +200,7 @@ def main():
     # Per-file detail for the written documents, where the models matter.
     print("WRITTEN DOCUMENTS (what each model found)\n")
     for entry in files:
-        if not entry["path"].endswith(".txt") or entry["layer"] == "rules":
+        if entry["layer"] in ("rules", "unreadable") or entry["path"].endswith(".csv"):
             continue
         truth = "sensitive" if entry["sensitive"] else "harmless"
         print(f"{entry['path']}  ({truth})")

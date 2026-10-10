@@ -13,9 +13,11 @@ from sirgal.risk import PRIVATE
 
 
 def test_decoy_labels_stay_in_the_list():
-    """Without them the model labels cities as addresses (seen in a real scan)."""
-    assert {"location city", "medical process"} <= set(ner.LABELS)
-    assert not ({"location city", "medical process"} & (ner.ADDRESS | ner.HEALTH))
+    """Without them the model mislabels things (each one seen in a real scan):
+    cities as addresses, "medical leave" as a condition, companies as people."""
+    decoys = {"location city", "medical process", "organization"}
+    assert decoys <= set(ner.LABELS)
+    assert not (decoys & (ner.ADDRESS | ner.HEALTH | ner.PERSON))
 
 
 def test_names_alone_are_not_sensitive():
