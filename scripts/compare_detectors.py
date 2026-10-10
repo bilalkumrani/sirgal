@@ -212,7 +212,7 @@ def main():
 
     print("SUMMARY (all files, scored against manifest.json)\n")
     print(f"{'SETUP':<18}  {'SENSITIVE CAUGHT':<17} {'FALSE ALARMS':<13} {'MS/FILE':>8} {'LOAD S':>7} {'DISK MB':>8}")
-    for label, rows, s, load_s, disk in results:
+    for label, _rows, s, load_s, disk in results:
         caught = f"{s['caught']}/{s['sensitive']}"
         false = f"{s['false_alarms']}/{s['harmless']}"
         print(f"{label:<18}  {caught:<17} {false:<13} {s['ms_per_file']:>8.0f} {load_s:>7.1f} {disk:>8.0f}")

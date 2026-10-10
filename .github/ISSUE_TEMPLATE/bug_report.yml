@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Sirgal doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Security problems don't belong here.** Please follow [SECURITY.md](https://github.com/bilalkumrani/sirgal/blob/main/SECURITY.md) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Ideally using the sample test company from `scripts/make_test_data.py`.
+      placeholder: |
+        1. Run `sirgal scan --source gdrive ...`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error output
+      description: Paste the error or traceback. Remove real file names, emails, paths and tokens first.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Sirgal version
+      description: Output of `sirgal --version`
+      placeholder: sirgal 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: Python 3.13, macOS 15
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed real file names, file contents, emails, paths and tokens from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

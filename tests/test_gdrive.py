@@ -55,10 +55,13 @@ def _fake_drive(items, contents):
 def test_scan_rates_each_file():
     items = [
         {"id": "f", "name": "HR", "mimeType": FOLDER, "parents": ["ROOT"]},
-        {"id": "1", "name": "ssn.csv", "mimeType": "text/csv", "parents": ["f"], "permissions": [OWNER, ANYONE_LINK]},
-        {"id": "2", "name": "notes.txt", "mimeType": "text/plain", "parents": ["f"], "permissions": [OWNER, ANYONE_LINK]},
+        {"id": "1", "name": "ssn.csv", "mimeType": "text/csv", "parents": ["f"],
+         "permissions": [OWNER, ANYONE_LINK]},
+        {"id": "2", "name": "notes.txt", "mimeType": "text/plain", "parents": ["f"],
+         "permissions": [OWNER, ANYONE_LINK]},
         {"id": "3", "name": "cards.csv", "mimeType": "text/csv", "parents": ["f"], "permissions": [OWNER]},
-        {"id": "4", "name": "scan.pdf", "mimeType": "application/pdf", "parents": ["f"], "permissions": [OWNER, FRIEND]},
+        {"id": "4", "name": "scan.pdf", "mimeType": "application/pdf", "parents": ["f"],
+         "permissions": [OWNER, FRIEND]},
     ]
     contents = {
         "1": "name,ssn\nAli,251-29-2287",
@@ -107,8 +110,10 @@ def test_office_files_are_read_and_scans_are_unknown():
     items = [
         {"id": "1", "name": "payroll.xlsx", "size": "5000", "permissions": [OWNER, FRIEND],
          "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
-        {"id": "2", "name": "passport.pdf", "size": "1500", "permissions": [OWNER, FRIEND], "mimeType": "application/pdf"},
-        {"id": "3", "name": "lunch.pdf", "size": "1500", "permissions": [OWNER, ANYONE_LINK], "mimeType": "application/pdf"},
+        {"id": "2", "name": "passport.pdf", "size": "1500", "permissions": [OWNER, FRIEND],
+         "mimeType": "application/pdf"},
+        {"id": "3", "name": "lunch.pdf", "size": "1500", "permissions": [OWNER, ANYONE_LINK],
+         "mimeType": "application/pdf"},
         {"id": "4", "name": "logo.png", "size": "900", "permissions": [OWNER, ANYONE_LINK], "mimeType": "image/png"},
     ]
     service = mock.MagicMock()

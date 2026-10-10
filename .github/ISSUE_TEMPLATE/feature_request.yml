@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest something Sirgal should do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How you'd like Sirgal to solve it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: checkboxes
+    id: promises
+    attributes:
+      label: Security promises
+      description: Sirgal is read-only, never keeps file contents, and sends nothing anywhere except the service being scanned. See CONTRIBUTING.md.
+      options:
+        - label: My idea keeps all of Sirgal's security promises, or I've explained above why one would need to change.
+          required: true

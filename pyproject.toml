@@ -31,7 +31,7 @@ Homepage = "https://github.com/bilalkumrani/sirgal"
 Issues = "https://github.com/bilalkumrani/sirgal/issues"
 
 [project.optional-dependencies]
-dev = ["faker", "pytest", "reportlab", "python-docx", "openpyxl"]
+dev = ["faker", "pytest", "reportlab", "python-docx", "openpyxl", "ruff==0.16.8"]
 ner = ["gliner"]
 
 [project.scripts]
@@ -42,3 +42,11 @@ path = "src/sirgal/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Errors, warnings, import order, likely bugs, and modern Python syntax.
+select = ["E", "F", "W", "I", "B", "UP"]

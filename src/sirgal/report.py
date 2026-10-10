@@ -198,7 +198,9 @@ def _html(rows, meta) -> str:
 
     def link_cell(r):
         url = safe_link(r.get("link"))
-        return f' · <a class="open" href="{_e(url)}" target="_blank" rel="noopener noreferrer">Open in Drive</a>' if url else ""
+        if not url:
+            return ""
+        return f' · <a class="open" href="{_e(url)}" target="_blank" rel="noopener noreferrer">Open in Drive</a>'
 
     attention_rows = "".join(
         f"<tr>"

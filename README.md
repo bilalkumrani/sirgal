@@ -177,11 +177,16 @@ cd sirgal
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+ruff check
 ```
 
 `python3 scripts/make_test_data.py` creates the sample Acme Robotics files in `test-data/`, with an answer key in `manifest.json`. Upload them to a test Google account to try a real scan without touching real data.
 
 `python3 scripts/compare_detectors.py` reruns the model comparison against that answer key (needs `pip install presidio-analyzer gliner` and a spaCy model; see the script for setup).
+
+## Contributing
+
+Contributions are welcome. Sirgal reads company files, so every change has to keep its security promises. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and follow the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security problem, see [SECURITY.md](SECURITY.md). Please don't use a public issue.
 
 ## Follow along
 
