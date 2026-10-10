@@ -24,7 +24,7 @@ def run_scan(source: str, model_name=None, report_path=None) -> None:
         try:
             model = ModelDetector(model_name)
         except ModelNotInstalled as exc:
-            raise SystemExit(str(exc))
+            raise SystemExit(str(exc)) from None
 
     print("Scanning Google Drive (read-only). Your browser may open to log in.\n", flush=True)
     progress = Progress()
