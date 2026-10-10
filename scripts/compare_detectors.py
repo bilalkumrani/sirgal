@@ -132,6 +132,8 @@ def evaluate(files, root, model=None):
     """Score one setup. Returns per-file rows and a summary."""
     rows, times = [], []
     for entry in files:
+        if not entry["path"].endswith((".txt", ".csv")):
+            continue  # PDF, Word and Excel join once Sirgal can read them
         text = (root / entry["path"]).read_text(encoding="utf-8")
         rules_found = scan_text(text, Path(entry["path"]).name)
         flagged = worst_severity(rules_found) in ("high", "medium")
