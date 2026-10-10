@@ -94,3 +94,48 @@ def test_scan_results_hold_no_file_contents():
         for p in patches:
             p.stop()
     assert "251-29-2287" not in str(results)
+
+
+def test_office_files_are_read_and_scans_are_unknown():
+    from test_extract import make_pdf, make_xlsx
+
+    files = {
+        "1": make_xlsx({"Summary": [["Team"]], "Detail": [["Name", "SSN"], ["Ali", "251-29-2287"]]}),
+        "2": make_pdf(shapes_only=True),
+        "3": make_pdf(["Team lunch on Friday"]),
+    }
+    items = [
+        {"id": "1", "name": "payroll.xlsx", "size": "5000", "permissions": [OWNER, FRIEND],
+         "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        {"id": "2", "name": "passport.pdf", "size": "1500", "permissions": [OWNER, FRIEND], "mimeType": "application/pdf"},
+        {"id": "3", "name": "lunch.pdf", "size": "1500", "permissions": [OWNER, ANYONE_LINK], "mimeType": "application/pdf"},
+        {"id": "4", "name": "logo.png", "size": "900", "permissions": [OWNER, ANYONE_LINK], "mimeType": "image/png"},
+    ]
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": items}
+    downloads = {}
+
+    def get_media(fileId):
+        downloads["last"] = fileId
+        return fileId
+
+    service.files.return_value.get_media.side_effect = get_media
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_download", side_effect=lambda request: files[request]):
+        results = {r["path"]: r for r in gdrive.scan()}
+
+    assert results["payroll.xlsx"]["risk"] == "high"          # SSN on the second sheet
+    assert results["passport.pdf"]["risk"] == "unknown"       # a scan: never OK
+    assert "no readable text" in results["passport.pdf"]["note"]
+    assert results["lunch.pdf"]["risk"] == "ok"
+    assert results["logo.png"]["note"] == "file type not supported yet"
+    assert "251-29-2287" not in str(results)
+
+
+def test_google_sheets_are_exported_as_excel_so_every_tab_is_checked():
+    item = {"id": "s", "name": "Payroll", "mimeType": "application/vnd.google-apps.spreadsheet"}
+    service = mock.MagicMock()
+    with mock.patch.object(gdrive, "_download", return_value=b"not a real file"):
+        gdrive._read_text(service, item)
+    service.files.return_value.export_media.assert_called_once_with(fileId="s", mimeType=gdrive.XLSX_MIME)

@@ -13,10 +13,19 @@ from pathlib import Path
 import pytest
 
 from sirgal.detectors import scan_text, worst_severity
+from sirgal.extract import extract_text, kind_for
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "make_test_data.py"
 
 pytest.importorskip("faker")  # the generator needs Faker (pip install -e ".[dev]")
+
+
+def read_like_sirgal(path):
+    """Text the way the scan sees it: documents go through the extractor."""
+    kind = kind_for(name=path.name)
+    if kind:
+        return extract_text(path.read_bytes(), kind)
+    return path.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("seed", [1, 42, 1234])
@@ -30,12 +39,14 @@ def test_detector_matches_manifest(tmp_path, seed):
     manifest = json.loads((root / "manifest.json").read_text())
 
     for entry in manifest["files"]:
-        if entry["layer"] in ("model", "unreadable"):
-            continue
-        if not entry["path"].endswith((".txt", ".csv")):
-            continue  # PDF, Word and Excel are checked once Sirgal can read them
         path = root / entry["path"]
-        found = scan_text(path.read_text(), path.name)
+        text = read_like_sirgal(path)
+        if entry["layer"] == "unreadable":
+            assert text is None, f"{entry['path']}: expected no readable text"
+            continue
+        if entry["layer"] == "model":
+            continue
+        found = scan_text(text, path.name)
         flagged = worst_severity(found) in ("high", "medium")
         assert flagged == entry["sensitive"], f"{entry['path']}: found {found}"
 
