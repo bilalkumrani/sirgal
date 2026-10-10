@@ -2,6 +2,9 @@
 
 from unittest import mock
 
+import httplib2
+from googleapiclient.errors import HttpError
+
 from sirgal.connectors import gdrive
 from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE
 
@@ -76,6 +79,27 @@ def test_scan_marks_download_timeout_unknown_and_continues():
     assert results["timeout.txt"]["checked"] is False
     assert results["timeout.txt"]["note"] == "couldn't download: network timeout"
     assert results["ok.txt"]["risk"] == "ok"
+
+
+def test_scan_redacts_http_error_details_from_download_note():
+    item = {"id": "1", "name": "private.txt", "mimeType": "text/plain", "permissions": [OWNER, FRIEND]}
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": [item]}
+    error = HttpError(
+        httplib2.Response({"status": 403}),
+        b"private response details",
+        uri="https://www.googleapis.com/drive/v3/files/private-id?token=secret",
+    )
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_read_text", side_effect=error):
+        result = gdrive.scan()[0]
+
+    assert result["risk"] == "unknown"
+    assert result["note"] == "couldn't download: Google returned 403"
+    assert "private-id" not in result["note"]
+    assert "secret" not in result["note"]
+    assert "private response details" not in result["note"]
 
 
 def _fake_drive(items, contents):

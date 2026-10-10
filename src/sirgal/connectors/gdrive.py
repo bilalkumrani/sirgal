@@ -150,6 +150,19 @@ def _download(request):
     return buffer.getvalue()
 
 
+def _download_problem(error):
+    """Return a short, non-sensitive reason for a failed download."""
+    if isinstance(error, HttpError):
+        return f"Google returned {error.resp.status}"
+    if (
+        isinstance(error, TimeoutError)
+        or "timeout" in str(error).lower()
+        or "timed out" in str(error).lower()
+    ):
+        return "network timeout"
+    return "network error"
+
+
 def _read_text(service, item):
     """Download a file into memory and return its text, or None if there is none to read."""
     mime = item["mimeType"]
@@ -205,15 +218,7 @@ def scan(model=None, progress=None):
 
         note = ""
         if download_error is not None:
-            reason = str(download_error).strip() or type(download_error).__name__
-            lower_reason = reason.lower()
-            if (
-                isinstance(download_error, TimeoutError)
-                or "timeout" in lower_reason
-                or "timed out" in lower_reason
-            ):
-                reason = "network timeout"
-            note = "couldn't download: " + reason
+            note = "couldn't download: " + _download_problem(download_error)
         elif not checked:
             if not supported(item):
                 note = "file type not supported yet"
