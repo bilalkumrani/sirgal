@@ -4,13 +4,16 @@ Some files contain sensitive data (salaries, SSNs, card numbers, passwords),
 some are harmless. manifest.json records what each file contains, how it is
 meant to be shared, and which detection layer should catch it:
 
-    "rules"  structured data that patterns and checksums can find
-    "model"  sensitive details in written text, which needs a local model
+    "rules"       structured data that patterns and checksums can find
+    "model"       sensitive details in written text, which needs a local model
+    "unreadable"  a file with no text to read (like a scanned image), which
+                  Sirgal must report as UNKNOWN, never OK
 
 Some harmless files are full of people's names on purpose. Almost every
 document mentions people, so names alone must not make a file risky.
 
-Everything here is fake, made up by Faker.
+Everything here is fictional, made up by Faker. The files come in the formats
+companies actually use: text, CSV, PDF, Word and Excel.
 
 Usage:
     python scripts/make_test_data.py
@@ -20,9 +23,14 @@ Usage:
 import argparse
 import csv
 import json
+import textwrap
 from pathlib import Path
 
+from docx import Document
 from faker import Faker
+from openpyxl import Workbook
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 COMPANY = "Acme Robotics"
 DOMAIN = "acme.example"  # .example is reserved, so it can never be a real domain
@@ -46,6 +54,53 @@ def write_text(path, text):
     path.write_text(text, encoding="utf-8")
 
 
+def write_docx(path, paragraphs):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = Document()
+    for paragraph in paragraphs:
+        doc.add_paragraph(paragraph)
+    doc.save(path)
+
+
+def write_xlsx(path, sheets):
+    """sheets: {sheet name: list of rows}, in order."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    workbook = Workbook()
+    for i, (name, rows) in enumerate(sheets.items()):
+        sheet = workbook.active if i == 0 else workbook.create_sheet()
+        sheet.title = name
+        for row in rows:
+            sheet.append(row)
+    workbook.save(path)
+
+
+def write_pdf(path, lines):
+    """A simple one-page PDF with real, selectable text."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    page = canvas.Canvas(str(path), pagesize=A4, invariant=1)
+    y = 800
+    for line in lines:
+        for part in textwrap.wrap(line, 90) or [""]:
+            page.drawString(60, y, part)
+            y -= 18
+    page.showPage()
+    page.save()
+
+
+def write_scanned_pdf(path):
+    """A PDF with shapes only and no text layer, like a scanned ID card."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    page = canvas.Canvas(str(path), pagesize=A4, invariant=1)
+    page.setFillGray(0.85)
+    page.roundRect(60, 560, 470, 240, 12, fill=1, stroke=0)   # the card
+    page.setFillGray(0.6)
+    page.rect(80, 600, 120, 160, fill=1, stroke=0)            # the photo
+    for i in range(6):                                        # printed lines
+        page.rect(220, 740 - i * 24, 280 - i * 20, 8, fill=1, stroke=0)
+    page.showPage()
+    page.save()
+
+
 def make_employees(fake, count):
     people = []
     for _ in range(count):
@@ -63,7 +118,7 @@ def make_employees(fake, count):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate fake company files for testing Sirgal.")
+    parser = argparse.ArgumentParser(description="Generate fictional company files for testing Sirgal.")
     parser.add_argument("--out", default="test-data", help="output folder (default: test-data)")
     parser.add_argument("--employees", type=int, default=25, help="number of employees (default: 25)")
     parser.add_argument("--customers", type=int, default=40, help="number of customers (default: 40)")
@@ -215,13 +270,80 @@ def main():
     )
     record("HR/leave_policy.txt", COMPANY_WIDE, ["health_topic"], sensitive=False)
 
+    # ---- PDF, Word and Excel files. ----
+
+    # 13. Payroll workbook. The first sheet is harmless; the second has salaries
+    # and bank details, so a reader that only checks the first sheet misses it.
+    departments = ["Engineering", "Sales", "Operations", "Support"]
+    write_xlsx(root / "HR/payroll_q3.xlsx", {
+        "Summary": [["Department", "Headcount", "Total cost USD"]]
+                   + [[d, fake.random_int(3, 12), fake.random_int(300, 1500) * 1000] for d in departments],
+        "Detail": [["Name", "Annual salary USD", "Bank IBAN"]]
+                  + [[p["name"], p["salary"], p["iban"]] for p in staff],
+    })
+    record("HR/payroll_q3.xlsx", COMPANY_WIDE, ["person_name", "salary", "iban"])
+
+    # 14. Offer letter with a salary and a home address.
+    hire = fake.random_element(staff)
+    hire_first = hire["name"].split()[0]
+    write_docx(root / "HR/offer_letter.docx", [
+        "Offer of employment",
+        hire["name"],
+        f"{fake.street_address()}, {fake.city()}, {fake.state_abbr()} {fake.zipcode()}",
+        f"Dear {hire_first},",
+        f"We are pleased to offer you the position of {hire['job']} at {COMPANY}. "
+        f"Your annual salary will be ${hire['salary']:,}, paid monthly.",
+        "Please sign and return this letter within five working days.",
+    ])
+    record("HR/offer_letter.docx", COMPANY_WIDE, ["person_name", "home_address", "salary"])
+
+    # 15. Sick note as a PDF. Only a model can tell this is health information.
+    patient = fake.random_element(staff)
+    write_pdf(root / "HR/sick_note.pdf", [
+        "Medical certificate",
+        "",
+        f"This is to confirm that {patient['name']} was seen at our clinic this week.",
+        f"Diagnosis: {fake.random_element(conditions)}.",
+        f"Recommended rest: {fake.random_int(3, 14)} days.",
+    ])
+    record("HR/sick_note.pdf", COMPANY_WIDE, ["person_name", "health_info"], layer="model")
+
+    # 16. Supplier invoice, public. Business addresses and totals only. Must stay OK.
+    write_pdf(root / "Finance/vendor_invoice.pdf", [
+        f"Invoice INV-{fake.random_int(10000, 99999)}",
+        "",
+        f"From: {fake.company()}, {fake.street_address()}, {fake.city()}",
+        f"Bill to: {COMPANY}, {office}",
+        "",
+        "Servo motors x 40          4,800.00",
+        "Control boards x 25        7,600.00",
+        "Total due                 12,400.00 USD",
+        "",
+        "Payment due within 30 days.",
+    ])
+    record("Finance/vendor_invoice.pdf", PUBLIC_LINK, ["business_address"], sensitive=False)
+
+    # 17. Holiday calendar. Must stay OK.
+    write_xlsx(root / "General/holiday_calendar.xlsx", {
+        "2026": [["Date", "Holiday"], ["2026-01-01", "New Year's Day"], ["2026-07-04", "Independence Day"],
+                 ["2026-11-26", "Thanksgiving"], ["2026-12-25", "Christmas Day"]],
+    })
+    record("General/holiday_calendar.xlsx", COMPANY_WIDE, [], sensitive=False)
+
+    # 18. Scanned passport: a PDF with no text at all. Sirgal can't read it, so a
+    # shared copy must show as UNKNOWN, never OK.
+    write_scanned_pdf(root / "HR/passport_scan.pdf")
+    record("HR/passport_scan.pdf", COMPANY_WIDE, ["passport"], layer="unreadable")
+
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")
 
     risky = sum(1 for m in manifest if m["sensitive"] and m["sharing"] != PRIVATE)
     print(f"Created {len(manifest)} files in {root}/")
     model_only = sum(1 for m in manifest if m["layer"] == "model")
-    print(f"{risky} are sensitive and overshared ({model_only} need the model layer). See manifest.json for details.")
+    unreadable = sum(1 for m in manifest if m["layer"] == "unreadable")
+    print(f"{risky} are sensitive and overshared ({model_only} need the model layer, "
+          f"{unreadable} can't be read). See manifest.json for details.")
 
 
 if __name__ == "__main__":

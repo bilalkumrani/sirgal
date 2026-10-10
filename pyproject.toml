@@ -28,7 +28,7 @@ Homepage = "https://github.com/bilalkumrani/sirgal"
 Issues = "https://github.com/bilalkumrani/sirgal/issues"
 
 [project.optional-dependencies]
-dev = ["faker", "pytest"]
+dev = ["faker", "pytest", "reportlab", "python-docx", "openpyxl"]
 ner = ["gliner"]
 
 [project.scripts]
