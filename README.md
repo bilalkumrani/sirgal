@@ -2,7 +2,7 @@
 
 **Find sensitive files your AI assistant can see before your employees do.**
 
-> Sirgal is in early development, and I'm building it in public. Version 0.3.0 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word and Excel files, including personal details written in documents (optional local model). Microsoft 365 support is planned.
+> Sirgal is in early development, and I'm building it in public. Version 0.4.0 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word and Excel files, including personal details written in documents (optional local model), and saves a report you can share with your team. Microsoft 365 support is planned.
 
 ## The problem
 
@@ -95,6 +95,7 @@ Sirgal reads your files, so you should know exactly what it does with them.
 - **Runs on your own machine or servers.** Your data never goes to me or any third party.
 - **Read-only.** It asks Google for read-only access, so it can't change, delete or re-share anything. (A future opt-in "fix sharing" feature will ask for separate permission.)
 - **Doesn't keep file contents.** Files are read in memory during a scan and discarded right after. Sirgal keeps only the file name, link, sharing settings, and the types of sensitive data found.
+- **Private reports.** A saved report lists file names and sharing only, never contents, and only your user can open it. File names are escaped, so a file named to attack the report or a spreadsheet stays plain text.
 - **No outside AI services.** Everything runs on your machine, including the optional model. Nothing is sent to OpenAI, Google's AI, or anyone else.
 - **Open source.** Every line of code is here for you to check.
 
@@ -107,7 +108,7 @@ Sirgal reads your files, so you should know exactly what it does with them.
 - [x] Sensitive data detection, layer 2: home addresses and health details with a local model (optional)
 - [x] PDF, Word and Excel files
 - [ ] Scanned documents (text recognition)
-- [ ] HTML report
+- [x] HTML and CSV report
 - [ ] Microsoft 365 (OneDrive and SharePoint) connector
 - [ ] Fix risky sharing (opt-in)
 - [ ] Slack connector
@@ -145,6 +146,17 @@ sirgal scan --source gdrive
 The first time, your browser opens so you can approve read-only access. Sirgal saves the login token next to `credentials.json`, readable only by your user. To log out, delete `~/.config/sirgal/gdrive-token.json`.
 
 Sirgal currently scans files owned by the account you log in with.
+
+### Save a report
+
+Add `--report` to save the results for your team:
+
+```
+sirgal scan --source gdrive --report ~/Desktop/sirgal-report.html
+sirgal scan --source gdrive --report ~/Desktop/sirgal-report.csv
+```
+
+The HTML report opens in any browser, works offline, and lists every risky file with what was found, who can open it, what to do about it, and a link to fix it in Drive. The CSV has the same rows for spreadsheets or ticket systems. Save reports outside any Git folder, since file names can be sensitive.
 
 ### Optional: check notes and documents too
 
