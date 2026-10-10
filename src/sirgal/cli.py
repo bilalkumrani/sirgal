@@ -1,43 +1,20 @@
 """Command-line interface for Sirgal."""
 
 import argparse
+import time
+from datetime import datetime
 
 from sirgal import __version__
 from sirgal.ner import DEFAULT_MODEL
+from sirgal.progress import Progress
+from sirgal.report import describe_found, not_checked_reason, sort_results, write_report
 
-# (one, many). Types without a count are described in words only.
-LABELS = {
-    "ssn": ("SSN", "SSNs"),
-    "credit_card": ("card number", "card numbers"),
-    "iban": ("bank IBAN", "bank IBANs"),
-    "password": ("password", "passwords"),
-    "phone": ("phone number", "phone numbers"),
-    "email": ("email", "emails"),
-    "home_address": ("home address", "home addresses"),
-    "health_info": ("health detail", "health details"),
-}
-NO_COUNT = {"salary": "salary data", "date_of_birth": "dates of birth"}
+REPORT_TYPES = (".html", ".htm", ".csv")
 
-
-def describe_found(found: dict) -> str:
-    """{'ssn': 25, 'email': 1} -> '25 SSNs, 1 email'"""
-    from sirgal.detectors import SEVERITY
-
-    order = {"high": 0, "medium": 1, "low": 2}
-    parts = []
-    for kind in sorted(found, key=lambda k: (order[SEVERITY[k]], k)):
-        if kind in NO_COUNT:
-            parts.append(NO_COUNT[kind])
-        else:
-            one, many = LABELS[kind]
-            parts.append(f"{found[kind]} {one if found[kind] == 1 else many}")
-    return ", ".join(parts)
-
-
-def run_scan(source: str, model_name=None) -> None:
+def run_scan(source: str, model_name=None, report_path=None) -> None:
     # Imported here so `sirgal --version` stays fast.
     from sirgal.connectors import gdrive
-    from sirgal.risk import OK, RISK_ORDER, UNKNOWN
+    from sirgal.risk import OK, UNKNOWN
 
     model = None
     if model_name:
@@ -49,21 +26,27 @@ def run_scan(source: str, model_name=None) -> None:
         except ModelNotInstalled as exc:
             raise SystemExit(str(exc))
 
-    print("Scanning Google Drive (read-only). Your browser may open to log in.\n")
-    results = gdrive.scan(model=model)
+    print("Scanning Google Drive (read-only). Your browser may open to log in.\n", flush=True)
+    progress = Progress()
+    started, clock = datetime.now(), time.monotonic()
+    try:
+        results = gdrive.scan(model=model, progress=progress)
+    finally:
+        progress.clear()
+    seconds = time.monotonic() - clock
 
     if not results:
         print("No files found.")
         return
 
-    results.sort(key=lambda r: (RISK_ORDER[r["risk"]], r["exposure"], r["path"]))
+    results = sort_results(results)
     path_w = max(len(r["path"]) for r in results)
     share_w = max(len(r["sharing"]) for r in results)
 
     print(f"{'RISK':<7} {'SHARED WITH'.ljust(share_w)}   {'FILE'.ljust(path_w)}   FOUND")
     for r in results:
         if not r["checked"]:
-            found = f"(not checked: {r.get('note') or 'file type not supported yet'})"
+            found = f"(not checked: {not_checked_reason(r)})"
         else:
             found = describe_found(r["found"]) or "-"
         print(f"{r['risk'].upper():<7} {r['sharing'].ljust(share_w)}   {r['path'].ljust(path_w)}   {found}")
@@ -77,6 +60,13 @@ def run_scan(source: str, model_name=None) -> None:
     summary.append(f"{counts.get(OK, 0)} ok")
     print(f"\n{len(results)} files scanned: " + ", ".join(summary) + ".")
     print("File contents were read in memory and not saved.")
+    if report_path:
+        progress.status("Writing report...")
+        write_report(results, report_path, {
+            "source": "Google Drive", "model": model_name, "started": started, "seconds": seconds,
+        })
+        progress.clear()
+        print(f"Report saved to {report_path} (readable only by you).")
     if model is None:
         print("Tip: add --model to also check notes and documents for personal details.")
 
@@ -116,9 +106,17 @@ def main() -> None:
         ),
     )
 
+    scan.add_argument(
+        "--report",
+        metavar="FILE",
+        help="also save the results as a report: an .html page to share, or a .csv for spreadsheets",
+    )
+
     args = parser.parse_args()
     if args.command == "scan":
-        run_scan(args.source, args.model)
+        if args.report and not args.report.lower().endswith(REPORT_TYPES):
+            scan.error("--report must end in .html or .csv")
+        run_scan(args.source, args.model, args.report)
     else:
         parser.print_help()
 

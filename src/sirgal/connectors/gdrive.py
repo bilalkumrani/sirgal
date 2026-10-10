@@ -79,7 +79,7 @@ def _save_token(creds):
     os.chmod(TOKEN_FILE, 0o600)
 
 
-def _list_owned_items(service):
+def _list_owned_items(service, progress=None):
     """Every file and folder you own that isn't in the trash, page by page."""
     items, page_token = [], None
     while True:
@@ -90,6 +90,8 @@ def _list_owned_items(service):
             pageToken=page_token,
         ).execute()
         items.extend(response.get("files", []))
+        if progress:
+            progress.status(f"Listing files... {len(items)} found")
         page_token = response.get("nextPageToken")
         if not page_token:
             return items
@@ -158,21 +160,24 @@ def _read_text(service, item):
     return data.decode("utf-8", errors="replace")
 
 
-def scan(model=None):
+def scan(model=None, progress=None):
     """Check every owned file's sharing and content.
 
     model: an optional sirgal.ner.ModelDetector. When given, it also checks
     shared files that the rules haven't already rated high. Private files are
     always OK, so the model never needs to read them.
+    progress: an optional sirgal.progress.Progress to show how far along we are.
     """
     service = build("drive", "v3", credentials=get_credentials(), cache_discovery=False)
-    items = _list_owned_items(service)
+    items = _list_owned_items(service, progress)
     folders = {i["id"]: i for i in items if i["mimeType"] == FOLDER_TYPE}
+    files = [i for i in items if i["mimeType"] != FOLDER_TYPE]
 
     results = []
-    for item in items:
-        if item["mimeType"] == FOLDER_TYPE:
-            continue
+    for done, item in enumerate(files):
+        path = build_path(item, folders)
+        if progress:
+            progress.step(done, len(files), path)
         exposure, sharing = describe_sharing(item.get("permissions", []))
 
         text = _read_text(service, item)
@@ -193,7 +198,7 @@ def scan(model=None):
                 note = "no readable text, maybe a scan or a protected file"
 
         results.append({
-            "path": build_path(item, folders),
+            "path": path,
             "note": note,
             "link": item.get("webViewLink", ""),
             "exposure": exposure,
@@ -202,4 +207,6 @@ def scan(model=None):
             "found": found,
             "risk": rate(exposure, worst_severity(found), checked),
         })
+    if progress:
+        progress.step(len(files), len(files))
     return results
