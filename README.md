@@ -57,7 +57,7 @@ The salary sheet that anyone with the link can open is a problem. So are the sal
 
 The model layer follows one rule: a detail counts only when it belongs to a person. "Jason's home address" is sensitive; the office address is not. "Jason is having knee surgery" is sensitive; "employees can take medical leave" is not. Names on their own never make a file risky. The model only reads shared files that the rules haven't already rated high. [How it was chosen](https://github.com/bilalkumrani/sirgal/blob/main/scripts/compare_detectors.py): on the test company it caught 9 of 9 sensitive files with no false positives; Microsoft Presidio caught 7 and flagged a harmless invoice.
 
-It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), Google Docs and Google Sheets (every tab), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that still time out after retries, are listed as **UNKNOWN**, never as OK. A failed file download no longer stops the rest of the scan.
+It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), Google Docs and Google Sheets (every tab), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that fail to download even after retries, are listed as **UNKNOWN**, never as OK, because Sirgal doesn't call a file safe without looking inside. One failed download doesn't stop the rest of the scan.
 
 ## How it fits together
 
@@ -167,7 +167,7 @@ pip install "sirgal[ner]"
 sirgal scan --source gdrive --model
 ```
 
-The first run downloads the model from Hugging Face (about 700 MB) and caches it. It takes roughly a quarter of a second per shared document on a laptop. If you've already downloaded the model, point to its folder instead: `--model path/to/gliner-pii-base-v1.0`.
+The first run downloads the model from Hugging Face into your Hugging Face cache (`~/.cache/huggingface`). The model itself is about 650 MB, but the download can be larger, because every file in the model's repository is fetched. It takes roughly a quarter of a second per shared document on a laptop. If you've already downloaded the model, point to its folder instead: `--model path/to/gliner-pii-base-v1.0`.
 
 ## Development
 
