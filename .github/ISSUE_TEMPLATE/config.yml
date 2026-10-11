@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/bilalkumrani/sirgal/discussions
+    about: Questions about installing or running Sirgal, and ideas for features or new sources.
   - name: Report a security vulnerability
     url: https://github.com/bilalkumrani/sirgal/security/advisories/new
     about: Please report security problems privately, never in a public issue.

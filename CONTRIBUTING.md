@@ -24,9 +24,12 @@ These are not negotiable. A pull request that breaks one won't be merged, howeve
 
 Requires Python 3.10 or newer.
 
+First, fork the repository on GitHub (the **Fork** button at the top right). Then clone your fork and connect it to the main repository:
+
 ```
-git clone https://github.com/bilalkumrani/sirgal.git
+git clone https://github.com/<your-username>/sirgal.git
 cd sirgal
+git remote add upstream https://github.com/bilalkumrani/sirgal.git
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -40,7 +43,7 @@ To try real scans, create the sample company with `python3 scripts/make_test_dat
 
 ## Workflow
 
-1. **Fork** the repository (or branch, if you're a maintainer).
+1. **Start from the latest code**: run `git fetch upstream` and create your branch from `upstream/main`. Maintainers branch from `origin/main`.
 2. **Create a branch** named after the change:
    - `feature/short-description` for new features
    - `fix/short-description` for bug fixes
