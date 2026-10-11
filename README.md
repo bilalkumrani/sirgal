@@ -2,7 +2,7 @@
 
 **Find sensitive files your AI assistant can see before your employees do.**
 
-> Sirgal is in early development, and I'm building it in public. Version 0.4.0 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word and Excel files, including personal details written in documents (optional local model), and saves a report you can share with your team. Microsoft 365 support is planned.
+> Sirgal is in early development, and I'm building it in public. Version 0.4.1 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word and Excel files, including personal details written in documents (optional local model), and saves a report you can share with your team. Microsoft 365 support is planned.
 
 ## The problem
 
