@@ -16,6 +16,7 @@ SEVERITY = {
     "iban": HIGH,
     "password": HIGH,
     "salary": HIGH,
+    "secret_key": HIGH,
     "date_of_birth": MEDIUM,
     "phone": MEDIUM,
     "email": LOW,
@@ -30,6 +31,17 @@ SSN = re.compile(r"\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b")
 CARD = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")
 IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
 PHONE = re.compile(r"(?<!\d)(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}(?!\d)")
+
+# Private keys and cloud API keys. A private key block counts once, header to footer,
+# so its base64 body can't be mistaken for phone numbers.
+SECRET_KEY = re.compile(
+    r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----(?:.*?-----END [A-Z0-9 ]+-----)?"
+    r"|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"                        # AWS access key ID
+    r"|\bgh[opusr]_[A-Za-z0-9]{36,}\b|\bgithub_pat_\w{22,}"  # GitHub tokens
+    r"|(?<![\w-])AIza[\w-]{35}(?![\w-])"                     # Google API key
+    r"|\bxox[abeoprs]-[A-Za-z0-9-]{10,}",                     # Slack tokens
+    re.S,
+)
 
 # (?<![a-z]) instead of \b, so column names like annual_salary_usd still match.
 SALARY_WORDS = re.compile(r"(?<![a-z])(salary|salaries|compensation|payroll)(?![a-z])", re.I)
@@ -73,13 +85,16 @@ def scan_text(text: str, filename: str = "") -> dict:
 
     add("email", len(EMAIL.findall(text)))
     add("ssn", len(SSN.findall(text)))
+    add("secret_key", len(SECRET_KEY.findall(text)))
 
-    cards = [m for m in CARD.findall(text) if 13 <= sum(c.isdigit() for c in m) <= 19 and luhn_ok(m)]
+    # Keys are random characters, so take them out before looking for numbers.
+    no_keys = SECRET_KEY.sub(" ", text)
+    cards = [m for m in CARD.findall(no_keys) if 13 <= sum(c.isdigit() for c in m) <= 19 and luhn_ok(m)]
     add("credit_card", len(cards))
-    add("iban", sum(1 for m in IBAN.findall(text) if iban_ok(m)))
+    add("iban", sum(1 for m in IBAN.findall(no_keys) if iban_ok(m)))
 
     # Remove SSNs and card numbers first so their digits aren't counted as phones.
-    rest = SSN.sub(" ", CARD.sub(" ", text))
+    rest = SSN.sub(" ", CARD.sub(" ", no_keys))
     add("phone", len(PHONE.findall(rest)))
 
     # Keyword-based types: the word alone isn't enough, the file must look like data.

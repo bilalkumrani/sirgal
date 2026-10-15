@@ -23,6 +23,7 @@ LABELS = {
     "credit_card": ("card number", "card numbers"),
     "iban": ("bank IBAN", "bank IBANs"),
     "password": ("password", "passwords"),
+    "secret_key": ("private or API key", "private or API keys"),
     "phone": ("phone number", "phone numbers"),
     "email": ("email", "emails"),
     "home_address": ("home address", "home addresses"),
