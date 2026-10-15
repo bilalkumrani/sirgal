@@ -2,7 +2,7 @@
 
 **Find sensitive files your AI assistant can see before your employees do.**
 
-> Sirgal is in early development, and I'm building it in public. Version 0.4.1 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word and Excel files, including personal details written in documents (optional local model), and saves a report you can share with your team. Microsoft 365 support is planned.
+> Sirgal is in early development, and I'm building it in public. Version 0.4.1 scans Google Drive for overshared files that contain sensitive data, in text, PDF, Word, Excel and PowerPoint files, including personal details written in documents (optional local model), and saves a report you can share with your team. Microsoft 365 support is planned.
 
 ## The problem
 
@@ -21,6 +21,7 @@ $ sirgal scan --source gdrive --model
 
 RISK    SHARED WITH            FILE                                          FOUND
 HIGH    anyone with the link   acme-robotics/HR/salaries_2026.csv            25 bank IBANs, salary data, 25 emails
+HIGH    1 person               acme-robotics/HR/compensation_review.pptx     6 bank IBANs, salary data
 HIGH    1 person               acme-robotics/HR/employee_records.csv         25 SSNs, dates of birth, 25 emails
 HIGH    1 person               acme-robotics/HR/medical_leave_notes.txt      4 health details
 HIGH    1 person               acme-robotics/HR/offer_letter.docx            salary data
@@ -32,6 +33,7 @@ UNKNOWN 1 person               acme-robotics/HR/passport_scan.pdf            (no
 OK      anyone with the link   acme-robotics/Finance/vendor_invoice.pdf      -
 OK      anyone with the link   acme-robotics/Marketing/blog_ideas.txt        -
 OK      anyone with the link   acme-robotics/Marketing/customer_quote.txt    -
+OK      anyone with the link   acme-robotics/Sales/kickoff_deck.pptx         -
 OK      1 person               acme-robotics/General/holiday_calendar.xlsx   -
 OK      1 person               acme-robotics/General/office_move.txt         -
 OK      1 person               acme-robotics/General/team_lunch.txt          -
@@ -39,11 +41,11 @@ OK      1 person               acme-robotics/General/weekly_sync_notes.txt   -
 OK      1 person               acme-robotics/HR/leave_policy.txt             -
 OK      private                acme-robotics/Sales/customers.csv             40 card numbers, 38 phone numbers, 40 emails
 
-18 files scanned: 7 high risk, 1 medium risk, 1 shared but not checked, 9 ok.
+20 files scanned: 8 high risk, 1 medium risk, 1 shared but not checked, 10 ok.
 File contents were read in memory and not saved.
 ```
 
-The salary sheet that anyone with the link can open is a problem. So are the salaries on the second sheet of a payroll workbook, an offer letter, a sick note PDF, and an exit interview with someone's home address. The scanned passport has no text to read, so Sirgal says UNKNOWN instead of guessing. The customer list with card numbers is fine, because only its owner can see it. So are meeting notes full of names, an office address, a supplier invoice, and a leave policy that mentions medical leave.
+The salary sheet that anyone with the link can open is a problem. So are the salaries on the second sheet of a payroll workbook, bank details in a slide deck's speaker notes, an offer letter, a sick note PDF, and an exit interview with someone's home address. The scanned passport has no text to read, so Sirgal says UNKNOWN instead of guessing. The customer list with card numbers is fine, because only its owner can see it. So are meeting notes full of names, an office address, a supplier invoice, a sales kickoff deck, and a leave policy that mentions medical leave.
 
 ### What it checks
 
@@ -57,7 +59,7 @@ The salary sheet that anyone with the link can open is a problem. So are the sal
 
 The model layer follows one rule: a detail counts only when it belongs to a person. "Jason's home address" is sensitive; the office address is not. "Jason is having knee surgery" is sensitive; "employees can take medical leave" is not. Names on their own never make a file risky. The model only reads shared files that the rules haven't already rated high. [How it was chosen](https://github.com/bilalkumrani/sirgal/blob/main/scripts/compare_detectors.py): on the test company it caught 9 of 9 sensitive files with no false positives; Microsoft Presidio caught 7 and flagged a harmless invoice.
 
-It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), Google Docs and Google Sheets (every tab), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that fail to download even after retries, are listed as **UNKNOWN**, never as OK, because Sirgal doesn't call a file safe without looking inside. One failed download doesn't stop the rest of the scan.
+It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), PowerPoint (slides, tables and speaker notes), Google Docs and Google Sheets (every tab), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that fail to download even after retries, are listed as **UNKNOWN**, never as OK, because Sirgal doesn't call a file safe without looking inside. One failed download doesn't stop the rest of the scan.
 
 ## How it fits together
 
@@ -106,7 +108,7 @@ Sirgal reads your files, so you should know exactly what it does with them.
 - [x] Google Drive connector
 - [x] Sensitive data detection, layer 1: rules and checksums
 - [x] Sensitive data detection, layer 2: home addresses and health details with a local model (optional)
-- [x] PDF, Word and Excel files
+- [x] PDF, Word, Excel and PowerPoint files
 - [ ] Scanned documents (text recognition)
 - [x] HTML and CSV report
 - [ ] Microsoft 365 (OneDrive and SharePoint) connector
