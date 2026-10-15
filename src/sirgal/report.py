@@ -1,4 +1,4 @@
-"""Save scan results as a shareable HTML report or a CSV file.
+"""Save scan results as a shareable HTML report, a CSV file or JSON for other tools.
 
 Reports list file names, links and sharing settings, never file contents.
 File names come from users, so everything is escaped: in HTML, a file named
@@ -10,12 +10,13 @@ ran the scan, because file names and links can be sensitive too.
 import csv
 import html
 import io
+import json
 import os
 from datetime import datetime
 
 from sirgal import __version__
 from sirgal.detectors import HIGH, LOW, MEDIUM, SEVERITY
-from sirgal.risk import ANYONE, DOMAIN, OK, RISK_ORDER, UNKNOWN
+from sirgal.risk import ANYONE, DOMAIN, OK, PEOPLE, PRIVATE, RISK_ORDER, UNKNOWN
 
 # (one, many). Types without a count are described in words only.
 LABELS = {
@@ -30,6 +31,7 @@ LABELS = {
 }
 NO_COUNT = {"salary": "salary data", "date_of_birth": "dates of birth"}
 LEVELS = [HIGH, MEDIUM, LOW, UNKNOWN, OK]
+EXPOSURE_NAMES = {ANYONE: "anyone", DOMAIN: "domain", PEOPLE: "people", PRIVATE: "private"}
 
 
 def describe_found(found: dict) -> str:
@@ -86,11 +88,14 @@ def safe_link(url) -> str:
 
 
 def write_report(results, path, meta=None) -> str:
-    """Write an .html or .csv report, readable only by the current user. Returns the path."""
+    """Write an .html, .csv or .json report, readable only by the current user. Returns the path."""
     meta = meta or {}
     rows = sort_results(results)
-    if str(path).lower().endswith(".csv"):
+    suffix = str(path).lower()
+    if suffix.endswith(".csv"):
         content = _csv(rows)
+    elif suffix.endswith(".json"):
+        content = _json(rows, meta)
     else:
         content = _html(rows, meta)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -119,6 +124,41 @@ def _csv(rows) -> str:
             r["risk"], r["path"], r["sharing"], found_text(r), what_to_do(r), safe_link(r.get("link")),
         )])
     return out.getvalue()
+
+
+# ---------- JSON ----------
+
+def _counts_only(found) -> dict:
+    """Keep whole-number counts only, so a matched value can never slip into the file."""
+    return {str(k): v for k, v in found.items() if isinstance(v, int) and not isinstance(v, bool)}
+
+
+def _json(rows, meta) -> str:
+    started = meta.get("started") or datetime.now()
+    seconds = meta.get("seconds")
+    report = {
+        "meta": {
+            "sirgal_version": __version__,
+            "source": meta.get("source", "Google Drive"),
+            "started": started.isoformat(timespec="seconds"),
+            "seconds": round(seconds, 3) if seconds is not None else None,
+            "model": bool(meta.get("model")),
+        },
+        "files": [
+            {
+                "risk": r["risk"],
+                "path": r["path"],
+                "sharing": r["sharing"],
+                "exposure": EXPOSURE_NAMES[r["exposure"]],
+                "checked": r["checked"],
+                "note": r.get("note", ""),
+                "found": _counts_only(r["found"]),
+                "link": safe_link(r.get("link")),
+            }
+            for r in rows
+        ],
+    }
+    return json.dumps(report, indent=2, ensure_ascii=False) + "\n"
 
 
 # ---------- HTML ----------
