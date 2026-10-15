@@ -1,6 +1,6 @@
 """Generate a fictional company's files for testing Sirgal.
 
-Some files contain sensitive data (salaries, SSNs, card numbers, passwords),
+Some files contain sensitive data (salaries, SSNs, card numbers, passwords, keys),
 some are harmless. manifest.json records what each file contains, how it is
 meant to be shared, and which detection layer should catch it:
 
@@ -354,6 +354,30 @@ def main():
     # shared copy must show as UNKNOWN, never OK.
     write_scanned_pdf(root / "HR/passport_scan.pdf")
     record("HR/passport_scan.pdf", COMPANY_WIDE, ["passport"], layer="unreadable")
+
+    # 19. Deploy notes with cloud keys pasted in, visible to the whole company.
+    # The keys are random, made up here, and only shaped like real ones.
+    aws_key = "AKIA" + fake.lexify("?" * 16, letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+    gh_token = "ghp" + "_" + fake.pystr(min_chars=36, max_chars=36)
+    write_text(
+        root / "Engineering/deploy_notes.txt",
+        "Deploy notes\n\n"
+        "Run the release script from the main branch, then check the dashboard.\n\n"
+        f"aws_access_key_id = {aws_key}\n"
+        f"GITHUB_TOKEN={gh_token}\n",
+    )
+    record("Engineering/deploy_notes.txt", COMPANY_WIDE, ["secret_key"])
+
+    # 20. How-to page that explains API keys without containing one. Must stay OK.
+    write_text(
+        root / "Engineering/api_keys_howto.txt",
+        "How we handle API keys\n\n"
+        "Never paste an API key, token or private key into a doc or chat. "
+        "AWS access keys start with AKIA and GitHub tokens start with ghp_, "
+        "so they are easy to spot. Keep secrets in the vault and rotate any key "
+        "that was shared by mistake.\n",
+    )
+    record("Engineering/api_keys_howto.txt", COMPANY_WIDE, ["secret_topic"], sensitive=False)
 
     # 21. Compensation review deck. The salaries are in a slide table and the bank
     # details only in the speaker notes, which a slides-only reader would miss.
