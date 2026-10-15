@@ -1,4 +1,4 @@
-"""Pull plain text out of PDF, Word and Excel files, entirely in memory.
+"""Pull plain text out of PDF, Word, Excel and PowerPoint files, entirely in memory.
 
 Files arrive as bytes and never touch the disk. When a file has no text to
 read (a scanned image, a password-protected PDF, a damaged file), this returns
@@ -6,20 +6,26 @@ None, so the scan reports it as UNKNOWN instead of calling it safe.
 """
 
 import io
+import re
 import warnings
+import zipfile
+from xml.etree import ElementTree
 
 PDF = "pdf"
 DOCX = "docx"
 XLSX = "xlsx"
+PPTX = "pptx"
 
 MIME_TYPES = {
     "application/pdf": PDF,
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DOCX,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": XLSX,
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": PPTX,
 }
-SUFFIXES = {".pdf": PDF, ".docx": DOCX, ".xlsx": XLSX}
+SUFFIXES = {".pdf": PDF, ".docx": DOCX, ".xlsx": XLSX, ".pptx": PPTX}
 
 MAX_CHARS = 2_000_000  # stop collecting text past this, to keep memory bounded
+MAX_UNZIPPED_BYTES = 100 * 1024 * 1024  # a zip bomb unpacks far past this; treat it as unreadable
 
 
 def kind_for(mime=None, name=None):
@@ -34,8 +40,8 @@ def kind_for(mime=None, name=None):
 
 
 def extract_text(data: bytes, kind: str):
-    """Return the text in a PDF, Word or Excel file, or None if there is none to read."""
-    readers = {PDF: _pdf_text, DOCX: _docx_text, XLSX: _xlsx_text}
+    """Return the text in a PDF, Word, Excel or PowerPoint file, or None if there is none to read."""
+    readers = {PDF: _pdf_text, DOCX: _docx_text, XLSX: _xlsx_text, PPTX: _pptx_text}
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # damaged files trigger library warnings
@@ -92,3 +98,47 @@ def _xlsx_text(stream):
     finally:
         workbook.close()
     return "\n".join(parts)
+
+
+_DRAWING = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_SLIDE_PART = re.compile(r"ppt/(slides/slide|notesSlides/notesSlide)(\d+)\.xml")
+
+
+def _pptx_text(stream):
+    """Text from every slide, its tables and its speaker notes, read with the standard library."""
+    with zipfile.ZipFile(stream) as archive:
+        parts = []
+        for info in archive.infolist():
+            match = _SLIDE_PART.fullmatch(info.filename)
+            if match:  # slides first, then notes, each in slide order
+                parts.append((match[1].startswith("notes"), int(match[2]), info))
+        if sum(info.file_size for *_, info in parts) > MAX_UNZIPPED_BYTES:
+            return ""  # likely a zip bomb: report it as unreadable rather than unpack it
+        lines, size = [], 0
+        for *_, info in sorted(parts, key=lambda p: p[:2]):
+            xml = archive.read(info)  # zipfile stops at the declared size and checks the CRC
+            if b"<!DOCTYPE" in xml:
+                continue  # Office never writes a DTD; one here is an entity-expansion trick
+            for line in _drawing_lines(ElementTree.fromstring(xml)):
+                lines.append(line)
+                size += len(line)
+                if size > MAX_CHARS:
+                    return "\n".join(lines)
+    return "\n".join(lines)
+
+
+def _drawing_lines(element):
+    """One line per paragraph, and one comma-separated line per table row."""
+    if element.tag == _DRAWING + "tr":
+        cells = (" ".join(_paragraph_text(p) for p in cell.iter(_DRAWING + "p"))
+                 for cell in element.iter(_DRAWING + "tc"))
+        yield ",".join(cells)
+    elif element.tag == _DRAWING + "p":
+        yield _paragraph_text(element)
+    else:
+        for child in element:
+            yield from _drawing_lines(child)
+
+
+def _paragraph_text(paragraph):
+    return "".join(run.text or "" for run in paragraph.iter(_DRAWING + "t"))

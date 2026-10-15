@@ -13,7 +13,7 @@ Some harmless files are full of people's names on purpose. Almost every
 document mentions people, so names alone must not make a file risky.
 
 Everything here is fictional, made up by Faker. The files come in the formats
-companies actually use: text, CSV, PDF, Word and Excel.
+companies actually use: text, CSV, PDF, Word, Excel and PowerPoint.
 
 Usage:
     python scripts/make_test_data.py
@@ -29,6 +29,8 @@ from pathlib import Path
 from docx import Document
 from faker import Faker
 from openpyxl import Workbook
+from pptx import Presentation
+from pptx.util import Inches
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -72,6 +74,24 @@ def write_xlsx(path, sheets):
         for row in rows:
             sheet.append(row)
     workbook.save(path)
+
+
+def write_pptx(path, slides):
+    """slides: a list of (title, table rows or None, speaker notes or None)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deck = Presentation()
+    for title, rows, notes in slides:
+        slide = deck.slides.add_slide(deck.slide_layouts[5])  # title only
+        slide.shapes.title.text = title
+        if rows:
+            table = slide.shapes.add_table(len(rows), len(rows[0]), Inches(0.5), Inches(1.6),
+                                           Inches(9), Inches(0.4) * len(rows)).table
+            for r, row in enumerate(rows):
+                for c, value in enumerate(row):
+                    table.cell(r, c).text = str(value)
+        if notes:
+            slide.notes_slide.notes_text_frame.text = notes
+    deck.save(path)
 
 
 def write_pdf(path, lines):
@@ -358,6 +378,28 @@ def main():
         "that was shared by mistake.\n",
     )
     record("Engineering/api_keys_howto.txt", COMPANY_WIDE, ["secret_topic"], sensitive=False)
+
+    # 21. Compensation review deck. The salaries are in a slide table and the bank
+    # details only in the speaker notes, which a slides-only reader would miss.
+    reviewed = fake.random_elements(staff, length=6, unique=True)
+    write_pptx(root / "HR/compensation_review.pptx", [
+        ("Compensation review 2026", None, None),
+        ("Proposed salaries",
+         [["Name", "Job title", "Annual salary USD"]] + [[p["name"], p["job"], p["salary"]] for p in reviewed],
+         "Bonus payments go to these accounts:\n"
+         + "\n".join(f"{p['name']}: {p['iban']}" for p in reviewed)),
+    ])
+    record("HR/compensation_review.pptx", COMPANY_WIDE, ["person_name", "salary", "iban"])
+
+    # 22. Sales kickoff deck, shared publicly, with names in the speaker notes. Must stay OK.
+    presenters = [p["name"] for p in fake.random_elements(staff, length=2, unique=True)]
+    write_pptx(root / "Sales/kickoff_deck.pptx", [
+        (f"{COMPANY} sales kickoff", None, f"{presenters[0]} opens and introduces the agenda."),
+        ("This year's focus", [["Goal", "Owner"], ["Grow warehouse accounts", "Sales"],
+                               ["Launch the new arm", "Product"]],
+         f"{presenters[1]} walks through the goals. {fake.catch_phrase()}."),
+    ])
+    record("Sales/kickoff_deck.pptx", PUBLIC_LINK, ["person_name"], sensitive=False)
 
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")
