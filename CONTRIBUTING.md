@@ -22,7 +22,7 @@ These are not negotiable. A pull request that breaks one won't be merged, howeve
 
 ## Set up
 
-Requires Python 3.10 or newer.
+Requires Python 3.11 or newer.
 
 First, fork the repository on GitHub (the **Fork** button at the top right). Then clone your fork and connect it to the main repository:
 
@@ -52,7 +52,7 @@ To try real scans, create the sample company with `python3 scripts/make_test_dat
 4. **Check locally**: `pytest` and `ruff check` must both pass.
 5. **Commit** with a short message in the imperative mood, like `Add OCR for scanned PDFs` or `Fix timeout during file download`.
 6. **Open a pull request** against `main` and fill in the template. Link the issue with `Fixes #123`.
-7. **Checks run automatically**: tests on Python 3.10 to 3.13, and the style check. Every check must be green.
+7. **Checks run automatically**: tests on Python 3.11 to 3.14, and the style check. Every check must be green.
 8. **A maintainer reviews and merges.** Pull requests are squash-merged, so each one becomes a single commit on `main`.
 
 Nobody pushes directly to `main`, maintainers included.

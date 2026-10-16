@@ -47,7 +47,7 @@ body:
     id: environment
     attributes:
       label: Python version and operating system
-      placeholder: Python 3.13, macOS 15
+      placeholder: Python 3.14, macOS 26
     validations:
       required: true
   - type: checkboxes
