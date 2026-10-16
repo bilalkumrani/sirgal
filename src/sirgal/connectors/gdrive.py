@@ -7,6 +7,8 @@ memory, checked, and discarded. Only counts of what was found are kept.
 
 import io
 import os
+import socket
+import ssl
 from pathlib import Path
 
 import httplib2
@@ -43,13 +45,19 @@ EXPORT_AS = {
 }
 MAX_BYTES = 10 * 1024 * 1024  # skip files bigger than 10 MB for now
 RETRY_COUNT = 3
-DOWNLOAD_ERRORS = (
+# Failures talking to Google: an error response, a timeout, a dropped connection or
+# a failed DNS lookup. Local problems like an unwritable token file are not in here.
+NETWORK_ERRORS = (
     HttpError,
     httplib2.HttpLib2Error,
     TransportError,
     TimeoutError,
-    OSError,
+    ConnectionError,
+    socket.gaierror,
+    ssl.SSLError,
 )
+# A failed download only skips that one file, so any OS error can be caught there.
+DOWNLOAD_ERRORS = (*NETWORK_ERRORS, OSError)
 
 
 def get_credentials():
@@ -150,8 +158,8 @@ def _download(request):
     return buffer.getvalue()
 
 
-def _download_problem(error):
-    """Return a short, non-sensitive reason for a failed download."""
+def network_problem(error):
+    """Return a short, fixed reason for a failed request, never Google's own error text."""
     if isinstance(error, HttpError):
         return f"Google returned {error.resp.status}"
     if (
@@ -218,7 +226,7 @@ def scan(model=None, progress=None):
 
         note = ""
         if download_error is not None:
-            note = "couldn't download: " + _download_problem(download_error)
+            note = "couldn't download: " + network_problem(download_error)
         elif not checked:
             if not supported(item):
                 note = "file type not supported yet"
