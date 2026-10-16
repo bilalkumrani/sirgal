@@ -31,6 +31,13 @@ def run_scan(source: str, model_name=None, report_path=None) -> None:
     started, clock = datetime.now(), time.monotonic()
     try:
         results = gdrive.scan(model=model, progress=progress)
+    except gdrive.NETWORK_ERRORS as error:
+        # Stop rather than report a half-listed Drive as if it were complete. The
+        # message uses fixed phrases only: Google's errors carry URLs and file IDs.
+        raise SystemExit(
+            f"Couldn't reach Google Drive ({gdrive.network_problem(error)}). "
+            "Check your connection and run the scan again."
+        ) from None
     finally:
         progress.clear()
     seconds = time.monotonic() - clock
