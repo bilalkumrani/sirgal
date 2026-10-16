@@ -24,6 +24,7 @@ HIGH    anyone with the link   acme-robotics/HR/salaries_2026.csv            25 
 HIGH    1 person               acme-robotics/Engineering/deploy_notes.txt    2 private or API keys
 HIGH    1 person               acme-robotics/HR/compensation_review.pptx     6 bank IBANs, salary data
 HIGH    1 person               acme-robotics/HR/employee_records.csv         25 SSNs, dates of birth, 25 emails
+HIGH    1 person               acme-robotics/HR/india_new_joiners.xlsx       5 Aadhaar numbers
 HIGH    1 person               acme-robotics/HR/medical_leave_notes.txt      4 health details
 HIGH    1 person               acme-robotics/HR/offer_letter.docx            salary data
 HIGH    1 person               acme-robotics/HR/payroll_q3.xlsx              25 bank IBANs, salary data
@@ -40,20 +41,21 @@ OK      1 person               acme-robotics/General/holiday_calendar.xlsx   -
 OK      1 person               acme-robotics/General/office_move.txt         -
 OK      1 person               acme-robotics/General/team_lunch.txt          -
 OK      1 person               acme-robotics/General/weekly_sync_notes.txt   -
+OK      1 person               acme-robotics/HR/india_onboarding_guide.txt   -
 OK      1 person               acme-robotics/HR/leave_policy.txt             -
 OK      private                acme-robotics/Sales/customers.csv             40 card numbers, 38 phone numbers, 40 emails
 
-22 files scanned: 9 high risk, 1 medium risk, 1 shared but not checked, 11 ok.
+24 files scanned: 10 high risk, 1 medium risk, 1 shared but not checked, 12 ok.
 File contents were read in memory and not saved.
 ```
 
-The salary sheet that anyone with the link can open is a problem. So are the salaries on the second sheet of a payroll workbook, bank details in a slide deck's speaker notes, cloud keys pasted into deploy notes, an offer letter, a sick note PDF, and an exit interview with someone's home address. The scanned passport has no text to read, so Sirgal says UNKNOWN instead of guessing. The customer list with card numbers is fine, because only its owner can see it. So are meeting notes full of names, an office address, a supplier invoice, a sales kickoff deck, a leave policy that mentions medical leave, and a how-to page that explains API keys without containing one.
+The salary sheet that anyone with the link can open is a problem. So are the salaries on the second sheet of a payroll workbook, bank details in a slide deck's speaker notes, cloud keys pasted into deploy notes, Aadhaar numbers in a new-joiner sheet, an offer letter, a sick note PDF, and an exit interview with someone's home address. The scanned passport has no text to read, so Sirgal says UNKNOWN instead of guessing. The customer list with card numbers is fine, because only its owner can see it. So are meeting notes full of names, an office address, a supplier invoice, a sales kickoff deck, a leave policy that mentions medical leave, a how-to page that explains API keys without containing one, and an onboarding guide whose purchase order numbers look like Aadhaar numbers but fail the check digit.
 
 ### What it checks
 
 | Found in the file | How |
 |---|---|
-| Card numbers, bank IBANs | Pattern plus checksum (Luhn, mod-97), so random numbers don't count |
+| Card numbers, bank IBANs, Indian Aadhaar numbers | Pattern plus checksum (Luhn, mod-97, Verhoeff), so random numbers don't count |
 | US Social Security numbers, phone numbers, emails | Pattern |
 | Salary data, dates of birth | Keyword plus matching numbers or dates |
 | Passwords | Login keywords plus lines like `Stripe: user / secret` |

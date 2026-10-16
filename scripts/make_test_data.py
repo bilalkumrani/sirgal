@@ -1,6 +1,7 @@
 """Generate a fictional company's files for testing Sirgal.
 
-Some files contain sensitive data (salaries, SSNs, card numbers, passwords, keys),
+Some files contain sensitive data (salaries, SSNs, Aadhaar numbers, card numbers,
+passwords, keys),
 some are harmless. manifest.json records what each file contains, how it is
 meant to be shared, and which detection layer should catch it:
 
@@ -119,6 +120,40 @@ def write_scanned_pdf(path):
         page.rect(220, 740 - i * 24, 280 - i * 20, 8, fill=1, stroke=0)
     page.showPage()
     page.save()
+
+
+# Verhoeff tables, kept here rather than imported from Sirgal so the answer key
+# doesn't depend on the detector it is checking.
+VERHOEFF_D = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5], [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+    [3, 4, 0, 1, 2, 8, 9, 5, 6, 7], [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+    [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3], [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+    [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+]
+VERHOEFF_P = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4], [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+    [8, 9, 1, 6, 0, 4, 3, 5, 2, 7], [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+    [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+]
+VERHOEFF_INV = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9]
+
+
+def verhoeff_digit(digits):
+    """The check digit that makes `digits` plus it pass Verhoeff."""
+    check = 0
+    for i, d in enumerate(reversed(digits)):
+        check = VERHOEFF_D[check][VERHOEFF_P[(i + 1) % 8][int(d)]]
+    return str(VERHOEFF_INV[check])
+
+
+def fake_aadhaar(fake, valid=True):
+    """A made-up Aadhaar-shaped number in groups of four. valid=False gives a wrong check digit."""
+    digits = str(fake.random_int(2, 9)) + fake.numerify("#" * 10)
+    check = verhoeff_digit(digits)
+    if not valid:
+        check = str((int(check) + fake.random_int(1, 9)) % 10)
+    number = digits + check
+    return f"{number[:4]} {number[4:8]} {number[8:]}"
 
 
 def make_employees(fake, count):
@@ -400,6 +435,28 @@ def main():
          f"{presenters[1]} walks through the goals. {fake.catch_phrase()}."),
     ])
     record("Sales/kickoff_deck.pptx", PUBLIC_LINK, ["person_name"], sensitive=False)
+
+    # 23. New joiners in the India office, with Aadhaar numbers, visible to the whole company.
+    india = Faker("en_IN")
+    joiners = [india.name() for _ in range(5)]
+    write_xlsx(root / "HR/india_new_joiners.xlsx", {
+        "Joiners": [["Name", "Start date", "Aadhaar number"]]
+        + [[name, fake.date_this_year().isoformat(), fake_aadhaar(fake)] for name in joiners],
+    })
+    record("HR/india_new_joiners.xlsx", COMPANY_WIDE, ["person_name", "aadhaar"])
+
+    # 24. India onboarding guide. It explains Aadhaar and lists laptop purchase order
+    # numbers that look like Aadhaar numbers but fail the check digit. Must stay OK.
+    orders = [fake_aadhaar(fake, valid=False) for _ in range(3)]
+    write_text(
+        root / "HR/india_onboarding_guide.txt",
+        "Onboarding in the Bengaluru office\n\n"
+        "New joiners show their Aadhaar card to HR on the first day. Never copy the "
+        "Aadhaar number into email, chat or a shared sheet.\n\n"
+        "Laptops for this quarter were ordered on these purchase orders:\n"
+        + "\n".join(f"PO {number}" for number in orders) + "\n",
+    )
+    record("HR/india_onboarding_guide.txt", COMPANY_WIDE, ["aadhaar_topic"], sensitive=False)
 
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")

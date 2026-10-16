@@ -21,6 +21,7 @@ from sirgal.risk import ANYONE, DOMAIN, OK, PEOPLE, PRIVATE, RISK_ORDER, UNKNOWN
 # (one, many). Types without a count are described in words only.
 LABELS = {
     "ssn": ("SSN", "SSNs"),
+    "aadhaar": ("Aadhaar number", "Aadhaar numbers"),
     "credit_card": ("card number", "card numbers"),
     "iban": ("bank IBAN", "bank IBANs"),
     "password": ("password", "passwords"),
