@@ -9,7 +9,7 @@ from sirgal.ner import DEFAULT_MODEL
 from sirgal.progress import Progress
 from sirgal.report import describe_found, not_checked_reason, sort_results, write_report
 
-REPORT_TYPES = (".html", ".htm", ".csv")
+REPORT_TYPES = (".html", ".htm", ".csv", ".json")
 
 def run_scan(source: str, model_name=None, report_path=None) -> None:
     # Imported here so `sirgal --version` stays fast.
@@ -109,13 +109,16 @@ def main() -> None:
     scan.add_argument(
         "--report",
         metavar="FILE",
-        help="also save the results as a report: an .html page to share, or a .csv for spreadsheets",
+        help=(
+            "also save the results as a report: an .html page to share, "
+            "a .csv for spreadsheets, or .json for other tools"
+        ),
     )
 
     args = parser.parse_args()
     if args.command == "scan":
         if args.report and not args.report.lower().endswith(REPORT_TYPES):
-            scan.error("--report must end in .html or .csv")
+            scan.error("--report must end in .html, .csv or .json")
         run_scan(args.source, args.model, args.report)
     else:
         parser.print_help()

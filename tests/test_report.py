@@ -1,11 +1,13 @@
-"""Tests for the HTML and CSV reports."""
+"""Tests for the HTML, CSV and JSON reports."""
 
 import csv
 import io
+import json
 import os
 import stat
 import subprocess
 import sys
+from datetime import datetime
 
 from sirgal.report import describe_found, what_to_do, write_report
 from sirgal.risk import ANYONE, DOMAIN, PEOPLE, PRIVATE
@@ -94,8 +96,77 @@ def test_empty_attention_list_says_so(tmp_path):
     assert "Nothing needs attention" in page.read_text()
 
 
-def test_report_option_only_accepts_html_or_csv():
+def test_json_report_has_meta_and_one_entry_per_file(tmp_path):
+    out = tmp_path / "r.json"
+    started = datetime(2026, 10, 16, 9, 30, 0)
+    write_report(RESULTS, out, {"source": "Google Drive", "model": "gliner", "started": started, "seconds": 12.5})
+    with open(out, encoding="utf-8") as f:
+        report = json.load(f)
+    assert set(report) == {"meta", "files"}
+    meta = report["meta"]
+    assert meta["source"] == "Google Drive"
+    assert meta["started"] == "2026-10-16T09:30:00"
+    assert meta["seconds"] == 12.5
+    assert meta["model"] is True
+    assert meta["sirgal_version"]
+    files = report["files"]
+    assert len(files) == len(RESULTS)
+    assert all(set(f) == {"risk", "path", "sharing", "exposure", "checked", "note", "found", "link"} for f in files)
+    assert files[0]["path"] == "acme/HR/salaries.csv" and files[0]["risk"] == "high"
+    assert files[2]["checked"] is False and "no readable text" in files[2]["note"]
+
+
+def test_json_report_writes_exposure_as_a_word(tmp_path):
+    out = tmp_path / "r.json"
+    domain = result("acme/all-hands.txt", "low", DOMAIN, "everyone at acme.example", {"email": 2})
+    write_report(RESULTS + [domain], out)
+    by_path = {f["path"]: f["exposure"] for f in json.loads(out.read_text())["files"]}
+    assert by_path["acme/HR/salaries.csv"] == "anyone"
+    assert by_path["acme/all-hands.txt"] == "domain"
+    assert by_path["acme/HR/exit.txt"] == "people"
+    assert by_path["acme/Sales/customers.csv"] == "private"
+
+
+def test_json_report_keeps_counts_never_values(tmp_path):
+    out = tmp_path / "r.json"
+    leaky = result("a.txt", "high", ANYONE, "anyone with the link", {"ssn": 25, "password": "hunter2", "email": True})
+    write_report([leaky], out)
+    text = out.read_text()
+    assert json.loads(text)["files"][0]["found"] == {"ssn": 25}
+    assert "hunter2" not in text
+
+
+def test_json_report_without_meta_or_model(tmp_path):
+    out = tmp_path / "r.json"
+    write_report(RESULTS, out)
+    meta = json.loads(out.read_text())["meta"]
+    assert meta["model"] is False and meta["seconds"] is None
+    datetime.fromisoformat(meta["started"])
+
+
+def test_json_report_is_readable_only_by_the_user(tmp_path):
+    out = tmp_path / "r.json"
+    out.write_text("old")
+    os.chmod(out, 0o644)
+    write_report(RESULTS, out)
+    assert stat.S_IMODE(os.stat(out).st_mode) == 0o600
+
+
+def test_json_report_keeps_only_https_links(tmp_path):
+    out = tmp_path / "r.json"
+    rows = [
+        result("a.txt", "high", ANYONE, "anyone with the link", {"ssn": 1}, link="javascript:alert(1)"),
+        result("b.txt", "high", ANYONE, "anyone with the link", {"ssn": 1}, link="http://drive.google.com/x"),
+        result("c.txt", "high", ANYONE, "anyone with the link", {"ssn": 1}, link=None),
+        result("d.txt", "high", ANYONE, "anyone with the link", {"ssn": 1}),
+    ]
+    write_report(rows, out)
+    links = {f["path"]: f["link"] for f in json.loads(out.read_text())["files"]}
+    assert links == {"a.txt": "", "b.txt": "", "c.txt": "", "d.txt": "https://drive.google.com/file/d/abc/view"}
+
+
+def test_report_option_only_accepts_html_csv_or_json():
     run = subprocess.run([sys.executable, "-m", "sirgal.cli", "scan", "--source", "gdrive", "--report", "out.pdf"],
                          capture_output=True, text=True)
     assert run.returncode != 0
-    assert "must end in .html or .csv" in run.stderr
+    assert "must end in .html, .csv or .json" in run.stderr

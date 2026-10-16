@@ -159,9 +159,10 @@ Add `--report` to save the results for your team:
 ```
 sirgal scan --source gdrive --report ~/Desktop/sirgal-report.html
 sirgal scan --source gdrive --report ~/Desktop/sirgal-report.csv
+sirgal scan --source gdrive --report ~/Desktop/sirgal-report.json
 ```
 
-The HTML report opens in any browser, works offline, and lists every risky file with what was found, who can open it, what to do about it, and a link to fix it in Drive. The CSV has the same rows for spreadsheets or ticket systems. Save reports outside any Git folder, since file names can be sensitive.
+The HTML report opens in any browser, works offline, and lists every risky file with what was found, who can open it, what to do about it, and a link to fix it in Drive. The CSV has the same rows for spreadsheets or ticket systems. The JSON is for scripts and dashboards: one object with a `meta` part (Sirgal version, source, start time, duration, whether the model was on) and a `files` list, where `exposure` is a word (`anyone`, `domain`, `people`, `private`) and `found` holds counts only, such as `{"ssn": 25}`, never the values. Every report is readable only by you (file mode 0600) and keeps only `https://` links. Save reports outside any Git folder, since file names can be sensitive.
 
 ### Optional: check notes and documents too
 
