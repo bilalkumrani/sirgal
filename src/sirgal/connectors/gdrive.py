@@ -37,11 +37,14 @@ FIELDS = "nextPageToken, files(id, name, mimeType, size, parents, webViewLink, p
 # Files we can read as plain text.
 TEXT_TYPES = {"text/plain", "text/csv", "text/markdown", "text/tab-separated-values", "application/json"}
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 # Google's own formats are exported first. Sheets go out as Excel so that every
-# tab is checked, not just the first one.
+# tab is checked, not just the first one. Slides go out as PowerPoint so that
+# tables and speaker notes are checked too, not just the slide text.
 EXPORT_AS = {
     "application/vnd.google-apps.document": "text/plain",
     "application/vnd.google-apps.spreadsheet": XLSX_MIME,
+    "application/vnd.google-apps.presentation": PPTX_MIME,
 }
 MAX_BYTES = 10 * 1024 * 1024  # skip files bigger than 10 MB for now
 RETRY_COUNT = 3
