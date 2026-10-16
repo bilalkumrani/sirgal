@@ -122,7 +122,7 @@ Sirgal reads your files, so you should know exactly what it does with them.
 
 ## Quick start
 
-Requires Python 3.10 or newer.
+Requires Python 3.11 or newer.
 
 ```
 pip install sirgal
