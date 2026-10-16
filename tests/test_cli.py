@@ -28,6 +28,10 @@ SECRETS = [FILE_ID, FILE_NAME, PAGE_TOKEN, "googleapis.com", GOOGLE_TEXT]
 
 SCANNING = "Scanning Google Drive (read-only). Your browser may open to log in."
 ADVICE = "Check your connection and run the scan again."
+# google.api_core warns on import when Python is older than it supports. It's
+# printed before Sirgal runs, says nothing about the scan, and would break the
+# exact stderr check. Only that one warning is hidden; any other still shows.
+OLD_PYTHON_WARNING = "ignore:You are using a non-supported Python version:FutureWarning"
 CASES = {
     "timeout": "network timeout",
     "http-503": "Google returned 503",
@@ -74,7 +78,8 @@ def failed_scan(request, tmp_path_factory):
     case = request.param
     workdir = tmp_path_factory.mktemp(case)
     code = DRIVER.format(tests=str(Path(__file__).parent), case=case)
-    run = subprocess.run([sys.executable, "-c", code], cwd=workdir, capture_output=True, text=True, timeout=60)
+    run = subprocess.run([sys.executable, "-W", OLD_PYTHON_WARNING, "-c", code],
+                         cwd=workdir, capture_output=True, text=True, timeout=60)
     return case, run, workdir
 
 
