@@ -209,3 +209,76 @@ def test_google_sheets_are_exported_as_excel_so_every_tab_is_checked():
     with mock.patch.object(gdrive, "_download", return_value=b"not a real file"):
         gdrive._read_text(service, item)
     service.files.return_value.export_media.assert_called_once_with(fileId="s", mimeType=gdrive.XLSX_MIME)
+
+
+def test_google_slides_are_exported_as_powerpoint_so_notes_are_checked():
+    item = {"id": "p", "name": "Kickoff", "mimeType": "application/vnd.google-apps.presentation"}
+    service = mock.MagicMock()
+    with mock.patch.object(gdrive, "_download", return_value=b"not a real file"):
+        gdrive._read_text(service, item)
+    service.files.return_value.export_media.assert_called_once_with(fileId="p", mimeType=gdrive.PPTX_MIME)
+    service.files.return_value.get_media.assert_not_called()
+
+
+SLIDES = "application/vnd.google-apps.presentation"
+
+
+def _scan_slides(items, decks):
+    """Scan `items` with Google faked out: exporting file `id` returns `decks[id]`."""
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": items}
+    service.files.return_value.export_media.side_effect = lambda fileId, mimeType: fileId
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_download", side_effect=lambda request: decks[request]):
+        return {r["path"]: r for r in gdrive.scan()}
+
+
+def test_shared_google_slides_are_checked_on_slides_tables_and_notes():
+    from test_extract import make_pptx
+
+    decks = {
+        "1": make_pptx([{"text": ["Customer onboarding"]}, {"text": ["Ali Khan", "SSN 251-29-2287"]}]),
+        "2": make_pptx([{"text": ["Pay review"], "table": [["Name", "SSN"], ["Sara", "251-29-2287"]]}]),
+        "3": make_pptx([{"text": ["Bank update"], "notes": "Ali's SSN is 251-29-2287"}]),
+        "4": make_pptx([{"text": ["Sales kickoff", "Goals for the quarter"], "notes": "Thank the team"}]),
+    }
+    items = [
+        {"id": "1", "name": "Onboarding", "mimeType": SLIDES, "permissions": [OWNER, ANYONE_LINK]},
+        {"id": "2", "name": "Pay review", "mimeType": SLIDES, "permissions": [OWNER, FRIEND]},
+        {"id": "3", "name": "Bank update", "mimeType": SLIDES, "permissions": [OWNER, ANYONE_LINK]},
+        {"id": "4", "name": "Kickoff", "mimeType": SLIDES, "permissions": [OWNER, ANYONE_LINK]},
+    ]
+    results = _scan_slides(items, decks)
+
+    assert all(r["checked"] and r["note"] == "" for r in results.values())  # no "not supported yet"
+    assert results["Onboarding"]["risk"] == "high"      # SSN on a slide
+    assert results["Pay review"]["risk"] == "high"      # SSN in a table
+    assert results["Bank update"]["risk"] == "high"     # SSN only in the speaker notes
+    assert results["Kickoff"]["risk"] == "ok"           # nothing sensitive
+    assert all(r["found"] == {"ssn": 1} for p, r in results.items() if p != "Kickoff")
+    assert "251-29-2287" not in str(results)
+
+
+def test_private_google_slides_with_an_ssn_are_ok():
+    from test_extract import make_pptx
+
+    items = [{"id": "1", "name": "Mine", "mimeType": SLIDES, "permissions": [OWNER]}]
+    result = _scan_slides(items, {"1": make_pptx([{"text": ["SSN 251-29-2287"]}])})["Mine"]
+    assert result["risk"] == "ok"
+
+
+def test_google_slides_that_fail_to_export_are_unknown():
+    # Drive refuses to export files past its size limit with a 403. Never call that OK.
+    item = {"id": "1", "name": "Huge deck", "mimeType": SLIDES, "permissions": [OWNER, ANYONE_LINK]}
+    error = HttpError(httplib2.Response({"status": 403}), b"exportSizeLimitExceeded", uri="https://x.example/1")
+    service = mock.MagicMock()
+    service.files.return_value.list.return_value.execute.return_value = {"files": [item]}
+    with mock.patch.object(gdrive, "build", return_value=service), \
+         mock.patch.object(gdrive, "get_credentials"), \
+         mock.patch.object(gdrive, "_download", side_effect=error):
+        result = gdrive.scan()[0]
+
+    assert result["risk"] == "unknown"
+    assert result["checked"] is False
+    assert result["note"] == "couldn't download: Google returned 403"

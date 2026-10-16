@@ -62,7 +62,7 @@ The salary sheet that anyone with the link can open is a problem. So are the sal
 
 The model layer follows one rule: a detail counts only when it belongs to a person. "Jason's home address" is sensitive; the office address is not. "Jason is having knee surgery" is sensitive; "employees can take medical leave" is not. Names on their own never make a file risky. The model only reads shared files that the rules haven't already rated high. [How it was chosen](https://github.com/bilalkumrani/sirgal/blob/main/scripts/compare_detectors.py): on the test company it caught 11 of 11 sensitive files with no false positives; Microsoft Presidio caught 9 and flagged a harmless invoice.
 
-It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), PowerPoint (slides, tables and speaker notes), Google Docs and Google Sheets (every tab), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that fail to download even after retries, are listed as **UNKNOWN**, never as OK, because Sirgal doesn't call a file safe without looking inside. One failed download doesn't stop the rest of the scan.
+It reads plain text, CSV, PDF, Word (including tables), Excel (every sheet), PowerPoint (slides, tables and speaker notes), Google Docs, Google Sheets (every tab) and Google Slides (slides, tables and speaker notes), all in memory. Shared files it can't read, like scanned images, password-protected PDFs, unsupported types, or files that fail to download even after retries, are listed as **UNKNOWN**, never as OK, because Sirgal doesn't call a file safe without looking inside. One failed download doesn't stop the rest of the scan.
 
 ## How it fits together
 
