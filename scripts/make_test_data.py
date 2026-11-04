@@ -1,7 +1,7 @@
 """Generate a fictional company's files for testing Sirgal.
 
-Some files contain sensitive data (salaries, SSNs, Aadhaar numbers, card numbers,
-passwords, keys),
+Some files contain sensitive data (salaries, SSNs, Aadhaar numbers, National
+Insurance numbers, card numbers, passwords, keys),
 some are harmless. manifest.json records what each file contains, how it is
 meant to be shared, and which detection layer should catch it:
 
@@ -154,6 +154,23 @@ def fake_aadhaar(fake, valid=True):
         check = str((int(check) + fake.random_int(1, 9)) % 10)
     number = digits + check
     return f"{number[:4]} {number[4:8]} {number[8:]}"
+
+
+# HMRC's rules, kept here rather than imported from Sirgal so the answer key
+# doesn't depend on the detector it is checking.
+NI_FIRST_LETTERS = "ABCEGHJKLMNOPRSTWXYZ"
+NI_SECOND_LETTERS = "ABCEGHJKLMNPRSTWXYZ"
+NI_NEVER_ISSUED = ["BG", "GB", "KN", "NK", "NT", "TN", "ZZ"]
+
+
+def fake_ni_number(fake, valid=True):
+    """A made-up National Insurance number in pairs. valid=False gives a prefix that is never issued."""
+    if valid:
+        prefixes = [a + b for a in NI_FIRST_LETTERS for b in NI_SECOND_LETTERS if a + b not in NI_NEVER_ISSUED]
+    else:
+        prefixes = NI_NEVER_ISSUED + ["DA", "FA", "QQ", "AO", "AV"]
+    prefix = fake.random_element(prefixes)
+    return f"{prefix} {fake.numerify('## ## ##')} {fake.random_element('ABCD')}"
 
 
 def make_employees(fake, count):
@@ -457,6 +474,33 @@ def main():
         + "\n".join(f"PO {number}" for number in orders) + "\n",
     )
     record("HR/india_onboarding_guide.txt", COMPANY_WIDE, ["aadhaar_topic"], sensitive=False)
+
+    # 25. New joiners in the UK office, with National Insurance numbers, visible to the
+    # whole company. Half are written without spaces.
+    uk = Faker("en_GB")
+    numbers = [fake_ni_number(fake) for _ in range(6)]
+    write_xlsx(root / "HR/uk_new_joiners.xlsx", {
+        "Joiners": [["Name", "Start date", "NI number"]]
+        + [
+            [uk.name(), fake.date_this_year().isoformat(), number if i % 2 else number.replace(" ", "")]
+            for i, number in enumerate(numbers)
+        ],
+    })
+    record("HR/uk_new_joiners.xlsx", COMPANY_WIDE, ["person_name", "ni_number"])
+
+    # 26. UK onboarding guide. It explains National Insurance numbers and lists courier
+    # references shaped like them but with prefixes that are never issued. Must stay OK.
+    references = [fake_ni_number(fake, valid=False) for _ in range(3)]
+    write_text(
+        root / "HR/uk_onboarding_guide.txt",
+        "Onboarding in the Manchester office\n\n"
+        "New joiners give HR their National Insurance number on the first day. It looks "
+        "like QQ 12 34 56 A, the example HMRC uses. Never copy your own number into "
+        "email, chat or a shared sheet.\n\n"
+        "Laptops for this quarter were sent with these courier references:\n"
+        + "\n".join(f"Ref {number}" for number in references) + "\n",
+    )
+    record("HR/uk_onboarding_guide.txt", COMPANY_WIDE, ["ni_number_topic"], sensitive=False)
 
     manifest_data = {"company": COMPANY, "seed": args.seed, "files": manifest}
     write_text(root / "manifest.json", json.dumps(manifest_data, indent=2) + "\n")
