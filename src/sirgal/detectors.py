@@ -13,6 +13,7 @@ HIGH, MEDIUM, LOW = "high", "medium", "low"
 SEVERITY = {
     "ssn": HIGH,
     "aadhaar": HIGH,
+    "ni_number": HIGH,
     "credit_card": HIGH,
     "iban": HIGH,
     "password": HIGH,
@@ -33,6 +34,14 @@ SSN = re.compile(r"\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b")
 # the same separator. It can't sit inside a longer number, so a grouped card number
 # or an IBAN's digits never match; the Verhoeff check digit filters the rest.
 AADHAAR = re.compile(r"(?<![\w-])(?<!\d[ -])[2-9]\d{3}([ -]?)\d{4}\1\d{4}(?![ -]?\d)(?![\w-])")
+# UK National Insurance number: two letters, six digits, then A to D, with or without
+# spaces. Skips prefixes that are never issued, as listed by HMRC:
+# https://www.gov.uk/hmrc-internal-manuals/national-insurance-manual/nim39110
+# There is no check digit, so the edges stop it matching inside a code or an email.
+NI_NUMBER = re.compile(
+    r"(?<![\w-])(?!BG|GB|KN|NK|NT|TN|ZZ)[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]"
+    r" ?\d{2} ?\d{2} ?\d{2} ?[A-D](?![\w@-])"
+)
 CARD = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")
 IBAN = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")
 PHONE = re.compile(r"(?<!\d)(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}(?!\d)")
@@ -134,6 +143,7 @@ def scan_text(text: str, filename: str = "") -> dict:
     add("credit_card", len(cards))
     add("iban", sum(1 for m in IBAN.findall(no_keys) if iban_ok(m)))
     add("aadhaar", sum(1 for m in AADHAAR.finditer(no_keys) if verhoeff_ok(m.group())))
+    add("ni_number", len(NI_NUMBER.findall(no_keys)))
 
     # Remove SSNs, card and Aadhaar numbers first so their digits aren't counted as phones.
     rest = SSN.sub(" ", CARD.sub(" ", AADHAAR.sub(" ", no_keys)))

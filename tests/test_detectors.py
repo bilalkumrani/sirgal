@@ -1,5 +1,7 @@
 """Tests for the rule-based detectors. All values here are made up."""
 
+import string
+
 from sirgal.detectors import HIGH, LOW, MEDIUM, iban_ok, luhn_ok, scan_text, verhoeff_ok, worst_severity
 
 
@@ -100,6 +102,59 @@ def test_iban_is_not_also_an_aadhaar_number():
 def test_aadhaar_is_not_counted_as_phone():
     assert scan_text("Contact: 2345 6789 0124") == {"aadhaar": 1}
     assert scan_text("Contact: 234567890124") == {"aadhaar": 1}
+
+
+def test_ni_number_found_with_or_without_spaces():
+    # Made up.
+    assert scan_text("NI: AB 12 34 56 C") == {"ni_number": 1}
+    assert scan_text("NI: AB123456C") == {"ni_number": 1}
+    assert scan_text("NI: AB 123456 C") == {"ni_number": 1}
+    assert scan_text("AB123456A, CE 12 34 56 B and (HJ123456D).") == {"ni_number": 3}
+    assert worst_severity(scan_text("AB123456C")) == HIGH
+
+
+def test_ni_number_prefixes_follow_hmrc_rules():
+    # https://www.gov.uk/hmrc-internal-manuals/national-insurance-manual/nim39110
+    never_issued = {"BG", "GB", "KN", "NK", "NT", "TN", "ZZ"}
+    for first in string.ascii_uppercase:
+        for second in string.ascii_uppercase:
+            prefix = first + second
+            issued = first not in "DFIQUV" and second not in "DFIOQUV" and prefix not in never_issued
+            assert (scan_text(f"{prefix}123456C") == {"ni_number": 1}) == issued, prefix
+
+
+def test_ni_number_ends_in_a_to_d_only():
+    for letter in "ABCD":
+        assert scan_text(f"AB123456{letter}") == {"ni_number": 1}
+    assert scan_text("AB123456E") == {}
+    assert scan_text("AB123456") == {}
+
+
+def test_ni_number_inside_a_longer_code_is_ignored():
+    assert scan_text("XAB123456C") == {}
+    assert scan_text("AB123456CD") == {}
+    assert scan_text("SKU-AB123456C") == {}
+    assert scan_text("AB123456C-2") == {}
+    assert scan_text("AB1234567C") == {}
+    assert scan_text("AB 12 34 56 CAT") == {}
+
+
+def test_ni_number_must_be_upper_case_and_on_one_line():
+    assert scan_text("ab123456c") == {}
+    assert scan_text("AB 12\n34 56 C") == {}
+
+
+def test_email_is_not_also_an_ni_number():
+    assert scan_text("AB123456C@acme.example") == {"email": 1}
+
+
+def test_ni_number_digits_are_not_counted_as_phone():
+    assert scan_text("Contact: AB 123456 C") == {"ni_number": 1}
+    assert scan_text("Contact: AB 12 34 56 C, CE 12 34 56 D") == {"ni_number": 2}
+
+
+def test_iban_is_not_also_an_ni_number():
+    assert scan_text("IBAN GB82WEST12345698765432") == {"iban": 1}
 
 
 def test_ssn_found_but_never_issued_ones_ignored():

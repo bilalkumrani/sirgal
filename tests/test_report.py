@@ -31,6 +31,8 @@ RESULTS = [
 def test_describe_found_reads_naturally():
     assert describe_found({"ssn": 25, "email": 1}) == "25 SSNs, 1 email"
     assert describe_found({"salary": 1, "iban": 2}) == "2 bank IBANs, salary data"
+    assert describe_found({"ni_number": 1}) == "1 National Insurance number"
+    assert describe_found({"ni_number": 6}) == "6 National Insurance numbers"
 
 
 def test_what_to_do_depends_on_who_can_open_it():

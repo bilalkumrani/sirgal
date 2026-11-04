@@ -22,6 +22,7 @@ from sirgal.risk import ANYONE, DOMAIN, OK, PEOPLE, PRIVATE, RISK_ORDER, UNKNOWN
 LABELS = {
     "ssn": ("SSN", "SSNs"),
     "aadhaar": ("Aadhaar number", "Aadhaar numbers"),
+    "ni_number": ("National Insurance number", "National Insurance numbers"),
     "credit_card": ("card number", "card numbers"),
     "iban": ("bank IBAN", "bank IBANs"),
     "password": ("password", "passwords"),
